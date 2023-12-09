@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 
- def pil_loader(self):
+def pil_loader(self):
         with open(self.path, 'rb') as f:
             img = Image.open(f)
             return img.convert('RGB')
