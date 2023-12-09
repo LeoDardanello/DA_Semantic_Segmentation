@@ -49,3 +49,4 @@ class CityScapes(Dataset):
                             else:
                                 if file_path.split("gtFine_")[1] == "labelTrainIds.png":
                                     label.append(relative_path)
+        return data, label
