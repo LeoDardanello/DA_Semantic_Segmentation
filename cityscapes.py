@@ -4,6 +4,11 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 
+ def pil_loader(self):
+        with open(self.path, 'rb') as f:
+            img = Image.open(f)
+            return img.convert('RGB')
+
 # mode = train or val, path = "/content/Cityscapes/Cityspaces/"  
 class CityScapes(Dataset):
     def __init__(self, mode, path):
@@ -21,12 +26,6 @@ class CityScapes(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def pil_loader(self):
-        with open(self.path, 'rb') as f:
-            img = Image.open(f)
-            return img.convert('RGB')
-
-
     def data_loader(self, mode, folder_path):
         data= []
         label = []
