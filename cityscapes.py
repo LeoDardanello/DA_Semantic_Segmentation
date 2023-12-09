@@ -5,15 +5,15 @@ import os
 from PIL import Image
 
 def pil_loader(p):
-        with open(p, 'rb') as f:
-            img = Image.open(f)
-            return img.convert('RGB')
+    with open(p, 'rb') as f:
+        img = Image.open(f)
+        return img.convert('RGB')
 
 # mode = train or val, path = "/content/Cityscapes/Cityspaces/"
 class CityScapes(Dataset):
-    def __init__(self, mode, path):
+    def __init__(self, mode):
         super(CityScapes, self).__init__()
-        self.path = path
+        self.path = "/content/Cityscapes/Cityspaces/"
         self.mode = mode
         self.data, self.label = self.data_loader()
 
