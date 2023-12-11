@@ -51,3 +51,4 @@ class CityScapes(Dataset):
                                     label.append(relative_path)
         return sorted(data), sorted(label)
 
+
