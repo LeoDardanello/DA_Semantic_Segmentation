@@ -1,13 +1,14 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 from torch.utils.data import Dataset
+from torchvision import transforms
 import os
 from PIL import Image
 
-def pil_loader(p):
+def pil_loader(p, mode):
     with open(p, 'rb') as f:
         img = Image.open(f)
-        return img.convert('RGB')
+        return img.convert(mode)
 
 # mode = train or val, path = "/content/Cityscapes/Cityspaces/"
 class CityScapes(Dataset):
@@ -16,12 +17,15 @@ class CityScapes(Dataset):
         self.path = "/content/Cityscapes/Cityspaces/"
         self.mode = mode
         self.data, self.label = self.data_loader()
-
+        self.preprocess = transforms.Compose([
+            transforms.PILToTensor(),                 # Converte l'immagine in un tensore
+        ])
 
     def __getitem__(self, idx):
-        image = pil_loader(self.path+self.data[idx])
-        label = pil_loader(self.path+self.label[idx])
-        return image, label
+        image = pil_loader(self.path+self.data[idx], 'RGB')
+        
+        label = pil_loader(self.path+self.label[idx], 'L')
+        return self.preprocess(image), self.preprocess(label)
 
     def __len__(self):
         return len(self.data)
@@ -46,3 +50,4 @@ class CityScapes(Dataset):
                                 if file_path.split("gtFine_")[1] == "labelTrainIds.png":
                                     label.append(relative_path)
         return sorted(data), sorted(label)
+
