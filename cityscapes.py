@@ -25,7 +25,13 @@ class CityScapes(Dataset):
         image = pil_loader(self.path+self.data[idx], 'RGB')
         
         label = pil_loader(self.path+self.label[idx], 'L')
-        return self.preprocess(image), self.preprocess(label)
+        tensor_image = self.preprocess(image)
+        if self.mode == 'train':
+          tensor_image = tensor_image.half()
+        if self.mode == 'val':
+          tensor_image = tensor_image.float()
+        
+        return tensor_image, self.preprocess(label)
 
     def __len__(self):
         return len(self.data)
@@ -50,5 +56,3 @@ class CityScapes(Dataset):
                                 if file_path.split("gtFine_")[1] == "labelTrainIds.png":
                                     label.append(relative_path)
         return sorted(data), sorted(label)
-
-
