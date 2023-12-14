@@ -1,12 +1,11 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 from torch.utils.data import Dataset
-import torch
 from torchvision import transforms
-from collections import namedtuple
-from utils import one_hot_it_v11_dice 
-import matplotlib.pyplot as plt
+import torch
 import os
+from collections import namedtuple
+from pprint import pprint
 from PIL import Image
 import numpy as np
 
@@ -14,17 +13,6 @@ def pil_loader(p, mode):
     with open(p, 'rb') as f:
         img = Image.open(f)
         return img.convert(mode)
-
-def one_hot_it(label, label_info):
-    semantic_map = np.zeros((19, label.shape[1], label.shape[2]))
-
-    for index, info in enumerate(label_info[:-1]):
-        color = info[:3].reshape(3, 1, 1)
-        equality = np.all(label == color, axis=0)
-     
-        semantic_map[index % 19][equality] = 1
-
-    return torch.tensor(semantic_map)
 
 CityscapesClass = namedtuple('CityscapesClass', ['name', 'id', 'train_id', 'category', 'category_id',
                                                      'has_instances', 'ignore_in_eval', 'color'])
@@ -67,43 +55,37 @@ classes = [
         CityscapesClass('license plate',        -1, 255, 'vehicle', 7, False, True, (0, 0, 142)),
     ]
 
-train_id_to_color = [list(c.color)+[1] for c in classes if not c.ignore_in_eval]
+train_id_to_color = [[c.train_id]+list(c.color) for c in classes]
 train_id_to_color = np.array(train_id_to_color)
 
+def one_hot_it(label, label_info):
 
-# mode = train or val, path = "/content/Cityscapes/Cityspaces/"
-class CityScapes(Dataset):
+	semantic_map = np.zeros(label.shape[1:])
+	for index, info in enumerate(label_info):
+		color = info[-3:]
+		class_map = np.all(label == color.reshape(3, 1, 1), axis=0)
+		semantic_map[class_map] = index
+	pprint(semantic_map)
+	return torch.tensor(semantic_map)
+
+
+class Gta5(Dataset):
     def __init__(self, mode):
-        super(CityScapes, self).__init__()
-        self.path = "/content/Cityscapes/Cityspaces/"
+        super(Gta5, self).__init__()
+        self.path = "/content/GTA5/"
         self.mode = mode
         self.data, self.label = self.data_loader()
         self.preprocess = transforms.Compose([
-            transforms.PILToTensor(),                 # Converte l'immagine in un tensore
+            transforms.ToTensor(),                 
         ])
 
     def __getitem__(self, idx):
         image = pil_loader(self.path+self.data[idx], 'RGB')
-        
         label = pil_loader(self.path+self.label[idx], 'RGB')
-        plt.imshow(np.array(label))
-        plt.axis('off')  # Disabilita gli assi
-        plt.show()
-    
         tensor_image = self.preprocess(image)
-
-        tensor_label = self.preprocess(label)
-        print(tensor_label)
-        print(tensor_label.permute(1,2,0))
-        
-        t = one_hot_it_v11_dice(tensor_label.permute(1,2,0), train_id_to_color)
-        print(t.shape)
-        if self.mode == 'train':
-          tensor_image = tensor_image.half()
-        if self.mode == 'val':
-          tensor_image = tensor_image.float()
-        
-        return tensor_image, t
+        transform2= transforms.PILToTensor()
+        tensor_label = one_hot_it(transform2(label).numpy(), train_id_to_color)   
+        return tensor_image, tensor_label 
 
     def __len__(self):
         return len(self.data)
@@ -111,20 +93,17 @@ class CityScapes(Dataset):
     def data_loader(self):
         data= []
         label = []
-        types = ["images/", "gtFine/"]
+        types = ["images/", "labels/"]
+        
         for t in types:
-            # check if path exists
-            if os.path.exists(self.path+t):
-                # get files from directory
-                for root, dirs, files in os.walk(self.path+t):
-                    if self.mode in root:
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            # get path in mode
-                            relative_path = os.path.relpath(file_path, self.path)
-                            if t=="images/":
-                                data.append(relative_path)
-                            else:
-                                if file_path.split("gtFine_")[1] == "color.png":
-                                    label.append(relative_path)
+            for root, dirs, files in os.walk(self.path+t):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, self.path)
+                    if t=="images/":
+                        data.append(relative_path)
+                    else:
+                        label.append(relative_path)
         return sorted(data), sorted(label)
+
+

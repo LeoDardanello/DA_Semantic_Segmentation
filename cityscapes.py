@@ -18,7 +18,7 @@ class CityScapes(Dataset):
         self.mode = mode
         self.data, self.label = self.data_loader()
         self.preprocess = transforms.Compose([
-            transforms.PILToTensor(),                 # Converte l'immagine in un tensore
+            transforms.ToTensor(),                 # Converte l'immagine in un tensore
         ])
 
     def __getitem__(self, idx):
@@ -26,10 +26,6 @@ class CityScapes(Dataset):
         
         label = pil_loader(self.path+self.label[idx], 'L')
         tensor_image = self.preprocess(image)
-        if self.mode == 'train':
-          tensor_image = tensor_image.half()
-        if self.mode == 'val':
-          tensor_image = tensor_image.float()
         
         return tensor_image, self.preprocess(label)
 
