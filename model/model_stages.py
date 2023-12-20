@@ -78,6 +78,7 @@ class AttentionRefinementModule(nn.Module):
         self.bn_atten = BatchNorm2d(out_chan)
 
         self.sigmoid_atten = nn.Sigmoid()
+        
         self.init_weight()
 
     def forward(self, x):
@@ -97,10 +98,10 @@ class AttentionRefinementModule(nn.Module):
 
 
 class ContextPath(nn.Module):
-    def __init__(self, backbone='CatNetSmall', pretrain_model='', use_conv_last=False, *args, **kwargs):
+    def __init__(self, backbone='CatNetSmall', pretrain_model='', training_model='', use_conv_last=False, *args, **kwargs):
         super(ContextPath, self).__init__()
 
-        self.backbone = STDCNet813(pretrain_model=pretrain_model, use_conv_last=use_conv_last)
+        self.backbone = STDCNet813(pretrain_model=pretrain_model, use_conv_last=use_conv_last, training_model=training_model)
         self.arm16 = AttentionRefinementModule(512, 128)
         inplanes = 1024
         if use_conv_last:
@@ -110,8 +111,23 @@ class ContextPath(nn.Module):
         self.conv_head16 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
         self.conv_avg = ConvBNReLU(inplanes, 128, ks=1, stride=1, padding=0)
 
+        if training_model:
+            print('use training model {}'.format(training_model))
+            self.init_contextPath(training_model)
+        else:
+          self.init_weight()
+    
+    def init_contextPath(self, training_model):
+        state_dict = torch.load(training_model)
+        self_state_dict = self.state_dict()
+        for k, v in state_dict.items():
+            part_of_key=k.split(".")
+            
+            if part_of_key[0]=="cp" and '.'.join(part_of_key[:2])!="cp.backbone":
+              real_key='.'.join(part_of_key[1::])
+              self_state_dict.update({real_key: v})
+        self.load_state_dict(self_state_dict)
 
-        self.init_weight()
 
     def forward(self, x):
         H0, W0 = x.size()[2:]
@@ -157,7 +173,7 @@ class ContextPath(nn.Module):
 
 
 class FeatureFusionModule(nn.Module):
-    def __init__(self, in_chan, out_chan, *args, **kwargs):
+    def __init__(self, in_chan, out_chan, training_model='', *args, **kwargs):
         super(FeatureFusionModule, self).__init__()
         self.convblk = ConvBNReLU(in_chan, out_chan, ks=1, stride=1, padding=0)
         self.conv1 = nn.Conv2d(out_chan,
@@ -174,7 +190,22 @@ class FeatureFusionModule(nn.Module):
                                bias=False)
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
-        self.init_weight()
+
+        if training_model:
+            print('use training model {}'.format(training_model))
+            self.init_ffm(training_model)
+        else:
+          self.init_weight()
+    
+    def init_ffm(self, training_model):
+        state_dict = torch.load(training_model)
+        self_state_dict = self.state_dict()
+        for k, v in state_dict.items():
+            part_of_key=k.split(".")
+            if part_of_key[0]=="ffm":
+              real_key='.'.join(part_of_key[1::])
+              self_state_dict.update({real_key: v})
+        self.load_state_dict(self_state_dict)
 
     def forward(self, fsp, fcp):
         fcat = torch.cat([fsp, fcp], dim=1)
@@ -207,12 +238,12 @@ class FeatureFusionModule(nn.Module):
 
 
 class BiSeNet(nn.Module):
-    def __init__(self, backbone, n_classes, pretrain_model='', use_boundary_2=False, use_boundary_4=False,
+    def __init__(self, backbone, n_classes, pretrain_model='', training_model='',use_boundary_2=False, use_boundary_4=False,
                  use_boundary_8=False, use_boundary_16=False, use_conv_last=False, heat_map=False, *args, **kwargs):
         super(BiSeNet, self).__init__()
 
         # self.heat_map = heat_map
-        self.cp = ContextPath(backbone, pretrain_model, use_conv_last=use_conv_last)
+        self.cp = ContextPath(backbone, pretrain_model,training_model=training_model, use_conv_last=use_conv_last)
 
         conv_out_inplanes = 128
         sp2_inplanes = 32
@@ -222,12 +253,26 @@ class BiSeNet(nn.Module):
         inplane = sp8_inplanes + conv_out_inplanes
 
 
-        self.ffm = FeatureFusionModule(inplane, 256)
+        self.ffm = FeatureFusionModule(inplane, 256, training_model=training_model)
         self.conv_out = BiSeNetOutput(256, 256, n_classes)
         self.conv_out16 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
         self.conv_out32 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
 
-        self.init_weight()
+        if training_model:
+            print('use training model {}'.format(training_model))
+            self.init_bisenet(training_model)
+        else:
+          self.init_weight()
+    
+    def init_bisenet(self, training_model):
+        state_dict = torch.load(training_model)
+        self_state_dict = self.state_dict()
+        for k, v in state_dict.items():
+            part_of_key=k.split(".")
+            if part_of_key[0]!="ffm" and part_of_key[0]!="cp":
+              real_key='.'.join(part_of_key)
+              self_state_dict.update({real_key: v})
+        self.load_state_dict(self_state_dict)
 
     def forward(self, x):
         H, W = x.size()[2:]

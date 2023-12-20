@@ -40,6 +40,22 @@ def get_label_info(csv_path):
 		label[label_name] = [int(r), int(g), int(b), class_11]
 	return label
 
+def one_hot_it_new(label, label_info):
+	# label is a tensor -> [3, H, W] with the RGB values for each pixel
+	# label_info is an array with [train_id, r value, g value, b value] for each class
+	# return a tensor with the semantic_map -> [class_num, H, W]
+	# the semantic map has 19 channels, for each channel there is a binary map HxW where the pixels 
+	# whose value is 1 means the pixel belongs to the class, otherwise the value is 0
+    semantic_map = np.zeros((19, label.shape[1], label.shape[2]))
+
+    for index, info in enumerate(label_info[:-1]):
+        color = info[:3].reshape(3, 1, 1)
+        equality = np.all(label == color, axis=0)
+     
+        semantic_map[index % 19][equality] = 1
+
+    return torch.tensor(semantic_map)
+
 def one_hot_it(label, label_info):
 	# return semantic_map -> [H, W]
 	semantic_map = np.zeros(label.shape[:-1])

@@ -65,7 +65,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
     loss_func = torch.nn.CrossEntropyLoss(ignore_index=255)
     max_miou = 0
     step = 0
-    for epoch in range(args.num_epochs):
+    for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
         model.train()
         tq = tqdm(total=len(dataloader_train) * args.batch_size)
@@ -204,6 +204,11 @@ def parse_args():
                        type=str,
                        default='crossentropy',
                        help='loss function')
+    parse.add_argument('--training_path',
+                      dest='training_path',
+                      type=str,
+                      default='',
+    )
 
 
     return parse.parse_args()
@@ -233,7 +238,7 @@ def main():
                        drop_last=False)
 
     ## model
-    model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last)
+    model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
 
     if torch.cuda.is_available() and args.use_gpu:
         model = torch.nn.DataParallel(model).cuda()

@@ -119,7 +119,7 @@ class CatBottleneck(nn.Module):
 # STDC1Net
 class STDCNet813(nn.Module):
     def __init__(self, base=64, layers=[2, 2, 2], block_num=4, type="cat", num_classes=1000, dropout=0.20,
-                 pretrain_model='', use_conv_last=False):
+                 pretrain_model='',training_model='', use_conv_last=False):
         super(STDCNet813, self).__init__()
         if type == "cat":
             block = CatBottleneck
@@ -141,11 +141,25 @@ class STDCNet813(nn.Module):
         self.x16 = nn.Sequential(self.features[4:6])
         self.x32 = nn.Sequential(self.features[6:])
 
-        if pretrain_model:
+        if training_model:
+            print('use training model {}'.format(training_model))
+            self.init_backbone(training_model)
+        elif pretrain_model:
             print('use pretrain model {}'.format(pretrain_model))
             self.init_weight(pretrain_model)
         else:
             self.init_params()
+    
+    def init_backbone(self, training_model):
+        state_dict = torch.load(training_model)
+        self_state_dict = self.state_dict()
+
+        for k, v in state_dict.items():
+            part_of_key=k.split(".")
+            if '.'.join(part_of_key[:2])=="cp.backbone":
+              real_key='.'.join(part_of_key[2::])
+              self_state_dict.update({real_key: v})
+        self.load_state_dict(self_state_dict)
 
     def init_weight(self, pretrain_model):
 
