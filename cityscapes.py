@@ -18,11 +18,12 @@ class CityScapes(Dataset):
         self.mode = mode
         self.data, self.label = self.data_loader()
         self.preprocess = transforms.Compose([
-            transforms.ToTensor(),                 # Converte l'immagine in un tensore
             transforms.Resize((args.crop_height,args.crop_width)), # Ridimensiona l'immagine
+            transforms.ToTensor(),                 # Converte l'immagine in un tensore
+
         ])
         
-        # ImageNet statistics
+        # ImageNet pretraining statistics
         self.normalizer=transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         
     def __getitem__(self, idx):
