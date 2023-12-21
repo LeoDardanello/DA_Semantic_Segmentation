@@ -222,7 +222,7 @@ def main():
 
     mode = args.mode
 
-    train_dataset = CityScapes(mode)
+    train_dataset = CityScapes(mode,args)
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,
                     shuffle=False,
@@ -230,7 +230,7 @@ def main():
                     pin_memory=False,
                     drop_last=True)
 
-    val_dataset = CityScapes(mode='val')
+    val_dataset = CityScapes(mode='val',args=args)
     dataloader_val = DataLoader(val_dataset,
                        batch_size=1,
                        shuffle=False,
@@ -239,6 +239,11 @@ def main():
 
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
+    
+    ## to load model
+    ## TO DO loading optimizer states, if optimizer uses other parameters than lr
+    if args.training_path != '':
+        model.module.load_state_dict(torch.load(args.training_path))
 
     if torch.cuda.is_available() and args.use_gpu:
         model = torch.nn.DataParallel(model).cuda()

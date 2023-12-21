@@ -141,26 +141,13 @@ class STDCNet813(nn.Module):
         self.x16 = nn.Sequential(self.features[4:6])
         self.x32 = nn.Sequential(self.features[6:])
 
-        if training_model:
-            print('use training model {}'.format(training_model))
-            self.init_backbone(training_model)
-        elif pretrain_model:
+
+        if pretrain_model:
             print('use pretrain model {}'.format(pretrain_model))
             self.init_weight(pretrain_model)
         else:
             self.init_params()
     
-    def init_backbone(self, training_model):
-        state_dict = torch.load(training_model)
-        self_state_dict = self.state_dict()
-
-        for k, v in state_dict.items():
-            part_of_key=k.split(".")
-            if '.'.join(part_of_key[:2])=="cp.backbone":
-              real_key='.'.join(part_of_key[2::])
-              self_state_dict.update({real_key: v})
-        self.load_state_dict(self_state_dict)
-
     def init_weight(self, pretrain_model):
 
         state_dict = torch.load(pretrain_model)["state_dict"]

@@ -12,22 +12,26 @@ def pil_loader(p, mode):
 
 # mode = train or val, path = "/content/Cityscapes/Cityspaces/"
 class CityScapes(Dataset):
-    def __init__(self, mode):
+    def __init__(self, mode,args):
         super(CityScapes, self).__init__()
         self.path = "/content/Cityscapes/Cityspaces/"
         self.mode = mode
         self.data, self.label = self.data_loader()
         self.preprocess = transforms.Compose([
             transforms.ToTensor(),                 # Converte l'immagine in un tensore
+            transforms.Resize((args.crop_height,args.crop_width)), # Ridimensiona l'immagine
         ])
-
+        
+        # ImageNet statistics
+        self.normalizer=transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+        
     def __getitem__(self, idx):
         image = pil_loader(self.path+self.data[idx], 'RGB')
         
         label = pil_loader(self.path+self.label[idx], 'L')
         tensor_image = self.preprocess(image)
         
-        return tensor_image, self.preprocess(label)
+        return self.normalizer(tensor_image), self.preprocess(label)
 
     def __len__(self):
         return len(self.data)
