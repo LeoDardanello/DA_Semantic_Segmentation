@@ -111,23 +111,8 @@ class ContextPath(nn.Module):
         self.conv_head16 = ConvBNReLU(128, 128, ks=3, stride=1, padding=1)
         self.conv_avg = ConvBNReLU(inplanes, 128, ks=1, stride=1, padding=0)
 
-        if training_model:
-            print('use training model {}'.format(training_model))
-            self.init_contextPath(training_model)
-        else:
-          self.init_weight()
+        self.init_weight()
     
-    def init_contextPath(self, training_model):
-        state_dict = torch.load(training_model)
-        self_state_dict = self.state_dict()
-        for k, v in state_dict.items():
-            part_of_key=k.split(".")
-            
-            if part_of_key[0]=="cp" and '.'.join(part_of_key[:2])!="cp.backbone":
-              real_key='.'.join(part_of_key[1::])
-              self_state_dict.update({real_key: v})
-        self.load_state_dict(self_state_dict)
-
 
     def forward(self, x):
         H0, W0 = x.size()[2:]
@@ -191,22 +176,9 @@ class FeatureFusionModule(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
 
-        if training_model:
-            print('use training model {}'.format(training_model))
-            self.init_ffm(training_model)
-        else:
-          self.init_weight()
-    
-    def init_ffm(self, training_model):
-        state_dict = torch.load(training_model)
-        self_state_dict = self.state_dict()
-        for k, v in state_dict.items():
-            part_of_key=k.split(".")
-            if part_of_key[0]=="ffm":
-              real_key='.'.join(part_of_key[1::])
-              self_state_dict.update({real_key: v})
-        self.load_state_dict(self_state_dict)
 
+        self.init_weight()
+    
     def forward(self, fsp, fcp):
         fcat = torch.cat([fsp, fcp], dim=1)
         feat = self.convblk(fcat)
@@ -258,22 +230,9 @@ class BiSeNet(nn.Module):
         self.conv_out16 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
         self.conv_out32 = BiSeNetOutput(conv_out_inplanes, 64, n_classes)
 
-        if training_model:
-            print('use training model {}'.format(training_model))
-            self.init_bisenet(training_model)
-        else:
-          self.init_weight()
-    
-    def init_bisenet(self, training_model):
-        state_dict = torch.load(training_model)
-        self_state_dict = self.state_dict()
-        for k, v in state_dict.items():
-            part_of_key=k.split(".")
-            if part_of_key[0]!="ffm" and part_of_key[0]!="cp":
-              real_key='.'.join(part_of_key)
-              self_state_dict.update({real_key: v})
-        self.load_state_dict(self_state_dict)
 
+        self.init_weight()
+    
     def forward(self, x):
         H, W = x.size()[2:]
 
