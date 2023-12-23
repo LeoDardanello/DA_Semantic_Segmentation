@@ -8,6 +8,7 @@ from collections import namedtuple
 from pprint import pprint
 from PIL import Image
 import numpy as np
+import pandas as pd
 
 def one_hot_it(label, label_info):
 	semantic_map = np.zeros(label.shape[1:])
@@ -18,6 +19,18 @@ def one_hot_it(label, label_info):
 	pprint(semantic_map)
 	return torch.from_numpy(semantic_map)
 
+def get_label_info(csv_path):
+  # return label -> {label_name: [r_value, g_value, b_value, ...}
+  ann = pd.read_csv(csv_path)
+  label = {}
+  for iter, row in ann.iterrows():
+    label_name = row[0]
+    label_id = row[1]
+    rgb_color = row[2]
+    label[label_name] = [label_id] +  list(rgb_color)
+  return label
+
+label_info = get_label_info('/content/DA_Semantic_Segmentation/GTA.csv') 
 
 class Gta5(Dataset):
     def __init__(self, mode, args):
@@ -37,7 +50,7 @@ class Gta5(Dataset):
         image = self.pil_loader(self.data[idx], 'RGB')
         label = self.pil_loader(self.label[idx], 'RGB')
         tensor_image = self.transform_data(image)
-        tensor_label = one_hot_it(np.array(label), train_id_to_color)   
+        tensor_label = one_hot_it(np.array(label), label_info)   
         return tensor_image, tensor_label 
 
     def __len__(self):
