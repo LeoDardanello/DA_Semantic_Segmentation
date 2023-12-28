@@ -57,15 +57,14 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
         img=img.convert("RGB").resize((width, height), Image.NEAREST)
       conv_img=one_hot_custom(np.array(img),label_info)
       conv_img = Image.fromarray(conv_img)
-      file_path =f"/content/GTA5/TrainID/image_{index}.png"
-      label_list.append(f"TrainID/image_{index}.png")
+      file_path =f"/content/GTA5/TrainID/{str(index).zfill(5)}.png"
+      label_list.append(f"TrainID/{str(index).zfill(5)}.png")
       conv_img.convert('L').save(file_path)
       index+=1
   else:
     print("Using labelID alredy generated")
     for l in label_colored:
-      file_path =f"/content/GTA5/TrainID/image_{index}.png"
-      label_list.append(f"TrainID/image_{index}.png")
+      label_list.append(f"TrainID/{str(index).zfill(5)}.png")
       index+=1
   return label_list
 
