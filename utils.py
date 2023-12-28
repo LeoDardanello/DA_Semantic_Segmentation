@@ -43,7 +43,7 @@ def get_label_info_custom(csv_path):
 
 def from_RGB_to_LabelID(label_colored,path,height,width):
   label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
-  index=0
+  index=1
   label_list=[]
   if not os.path.exists("/content/GTA5/TrainID"):
     os.makedirs("/content/GTA5/TrainID")
@@ -52,11 +52,12 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
     with open(path+l, 'rb') as f:
       img = Image.open(f)
       img=img.convert("RGB").resize((width, height), Image.NEAREST)
-    conv_img=one_hot_custom(img)
+    conv_img=one_hot_custom(np.array(img),label_info)
     conv_img = Image.fromarray(conv_img)
     file_path =f"/content/GTA5/TrainID/image_{index}.png"
     label_list.append(f"TrainID/image_{index}.png")
-    conv_img.save(file_path)
+    conv_img.convert('L').save(file_path)
+    index+=1
   return label_list
 
 #################################################################################################
