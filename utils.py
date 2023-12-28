@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset
 from PIL import Image
 import os
+from tqdm import tqdm
 
 ###########################################################################################
 def split_dataset(toSplit):
@@ -48,16 +49,24 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
   if not os.path.exists("/content/GTA5/TrainID"):
     os.makedirs("/content/GTA5/TrainID")
 
-  for l in label_colored:
-    with open(path+l, 'rb') as f:
-      img = Image.open(f)
-      img=img.convert("RGB").resize((width, height), Image.NEAREST)
-    conv_img=one_hot_custom(np.array(img),label_info)
-    conv_img = Image.fromarray(conv_img)
-    file_path =f"/content/GTA5/TrainID/image_{index}.png"
-    label_list.append(f"TrainID/image_{index}.png")
-    conv_img.convert('L').save(file_path)
-    index+=1
+  if not os.listdir("/content/GTA5/TrainID"): #se la cartella è vuota
+    print("Generating LabelID..")
+    for l in tqdm(label_colored):
+      with open(path+l, 'rb') as f:
+        img = Image.open(f)
+        img=img.convert("RGB").resize((width, height), Image.NEAREST)
+      conv_img=one_hot_custom(np.array(img),label_info)
+      conv_img = Image.fromarray(conv_img)
+      file_path =f"/content/GTA5/TrainID/image_{index}.png"
+      label_list.append(f"TrainID/image_{index}.png")
+      conv_img.convert('L').save(file_path)
+      index+=1
+  else:
+    print("Using labelID alredy generated")
+    for l in label_colored:
+      file_path =f"/content/GTA5/TrainID/image_{index}.png"
+      label_list.append(f"TrainID/image_{index}.png")
+      index+=1
   return label_list
 
 #################################################################################################
