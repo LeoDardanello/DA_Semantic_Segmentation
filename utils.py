@@ -7,7 +7,49 @@ import pandas as pd
 import random
 import numbers
 import torchvision
+from sklearn.model_selection import train_test_split
+from torch.utils.data import Subset
+from PIL import Image
 
+###########################################################################################
+def split_dataset(toSplit):
+  indsToSplit = range(0, len(toSplit))
+  splitting = train_test_split(indsToSplit, train_size = 0.5, random_state = 42, stratify = None, shuffle = True)
+  train_indexes = splitting[0]
+  val_indexes = splitting[1]
+  return Subset(toSplit,train_indexes),Subset(toSplit,val_indexes)
+
+def one_hot_custom(label, label_info):
+  semantic_map = np.zeros(label.shape[:2],dtype=np.uint8)
+  # print("sematic shape",semantic_map.shape)
+  # print("label_shape",label.shape)
+  for info in label_info:
+   color = info[-3:]
+   class_map = np.all(label == color.reshape(1, 1,3), axis=2)
+   semantic_map[class_map] = info[0]
+  return semantic_map  #return a numpy array
+
+def get_label_info_custom(csv_path):
+  # return label -> {label_name: [r_value, g_value, b_value, ...}
+  ann = pd.read_csv(csv_path)
+  label = []
+  for iter, row in ann.iterrows():
+    label_name = row["Name"]
+    label_id = row["ID"]
+    rgb_color = [row["R"],row["G"],row["B"]]
+    label.append( [label_id] +  rgb_color)
+  return np.array(label)
+
+def from_RGB_to_LabelID(dataset,path,height,width):
+
+  label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
+  for l in dataset.label:
+    with open(path+l, 'rb') as f:
+      img = Image.open(f)
+      img=img.convert("RGB").resize((width, height), Image.NEAREST)
+    conv_img=one_hot_custom(img)    
+      
+#################################################################################################
 
 def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
                       max_iter=300, power=0.9):
