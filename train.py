@@ -10,9 +10,9 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
 from utils import poly_lr_scheduler
-from utils import reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu
+from utils import reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
 from tqdm import tqdm
-
+from gta5 import GTA5
 
 logger = logging.getLogger()
 
@@ -209,8 +209,13 @@ def parse_args():
     parse.add_argument('--training_path',
                       dest='training_path',
                       type=str,
-                      default='',
-    )
+                      default='')
+    parse.add_argument('--dataset_train',
+                      type=str,
+                      default='Cityscapes')
+    # parse.add_argument('--dataset_test',
+    #                   type=str,
+    #                   default='')
 
 
     return parse.parse_args()
@@ -224,7 +229,13 @@ def main():
 
     mode = args.mode
 
-    train_dataset = CityScapes(mode,args)
+    if args.dataset_train=='Cityscapes':
+      train_dataset = CityScapes(mode,args)
+      val_dataset = CityScapes(mode='val',args=args)
+    elif args.dataset_train=='GTA5':
+      dataset=GTA5(mode,args)
+      train_dataset,val_dataset=split_dataset(dataset)
+
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,
                     shuffle=False,
@@ -232,7 +243,7 @@ def main():
                     pin_memory=False,
                     drop_last=True)
 
-    val_dataset = CityScapes(mode='val',args=args)
+    
     dataloader_val = DataLoader(val_dataset,
                        batch_size=1,
                        shuffle=False,
