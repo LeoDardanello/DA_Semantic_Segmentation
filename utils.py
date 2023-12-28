@@ -10,6 +10,7 @@ import torchvision
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset
 from PIL import Image
+import os
 
 ###########################################################################################
 def split_dataset(toSplit):
@@ -40,15 +41,24 @@ def get_label_info_custom(csv_path):
     label.append( [label_id] +  rgb_color)
   return np.array(label)
 
-def from_RGB_to_LabelID(dataset,path,height,width):
-
+def from_RGB_to_LabelID(label_colored,path,height,width):
   label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
-  for l in dataset.label:
+  index=0
+  label_list=[]
+  if not os.path.exists("/content/GTA5/TrainID"):
+    os.makedirs("/content/GTA5/TrainID")
+
+  for l in label_colored:
     with open(path+l, 'rb') as f:
       img = Image.open(f)
       img=img.convert("RGB").resize((width, height), Image.NEAREST)
-    conv_img=one_hot_custom(img)    
-      
+    conv_img=one_hot_custom(img)
+    conv_img = Image.fromarray(conv_img)
+    file_path =f"/content/GTA5/TrainID/image_{index}.png"
+    label_list.append(f"TrainID/image_{index}.png")
+    conv_img.save(file_path)
+  return label_list
+
 #################################################################################################
 
 def poly_lr_scheduler(optimizer, init_lr, iter, lr_decay_iter=1,
