@@ -231,11 +231,11 @@ def main():
 
     if args.dataset_train=='Cityscapes':
         print("Training on Cityscapes dataset")
-        train_dataset = CityScapes(mode,args)
-        val_dataset = CityScapes(mode='val',args=args)
+        train_dataset = CityScapes(mode)
+        val_dataset = CityScapes(mode='val')
     elif args.dataset_train=='GTA5':
         print("Training on GTA5 dataset")
-        dataset=GTA5(mode,args)
+        dataset=GTA5(mode)
         train_dataset,val_dataset=split_dataset(dataset)
 
     dataloader_train = DataLoader(train_dataset,
@@ -258,10 +258,10 @@ def main():
     else:
         if args.dataset_test=='GTA5':
             print("Testing on GTA5 dataset")
-            dataset=GTA5(mode,args)
+            dataset=GTA5(mode)
         else:
             print("Testing on Cityscapes dataset")
-            dataset=CityScapes(mode='val',args=args)
+            dataset=CityScapes(mode='val')
 
         _,test_dataset=split_dataset(dataset)
         dataloader_test = DataLoader(test_dataset,

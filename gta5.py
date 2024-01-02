@@ -12,18 +12,17 @@ import pandas as pd
 from utils import from_RGB_to_LabelID
 
 class GTA5(Dataset):
-    def __init__(self, mode, args):
+    def __init__(self, mode):
         super(GTA5, self).__init__()
         self.path = "/content/GTA5/"
         self.mode = mode
         self.data, self.label_colored = self.data_loader()
         self.transform_data = transforms.Compose([ 
-            # transforms.Resize((args.crop_height,args.crop_width)), # Ridimensiona l'immagine
             transforms.ToTensor(),                 # Converte l'immagine in un tensore
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
-        self.width=args.crop_width
-        self.height =args.crop_height
+        self.width = 1024
+        self.height = 512
         self.label=from_RGB_to_LabelID(self.label_colored,self.path,self.height,self.width)
 
     def pil_loader(self, p, mode):
