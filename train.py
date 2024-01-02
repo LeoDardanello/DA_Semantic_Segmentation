@@ -213,9 +213,9 @@ def parse_args():
     parse.add_argument('--dataset_train',
                       type=str,
                       default='Cityscapes')
-    # parse.add_argument('--dataset_test',
-    #                   type=str,
-    #                   default='')
+    parse.add_argument('--dataset_test',
+                      type=str,
+                      default='Cityscapes')
 
 
     return parse.parse_args()
@@ -230,11 +230,13 @@ def main():
     mode = args.mode
 
     if args.dataset_train=='Cityscapes':
-      train_dataset = CityScapes(mode,args)
-      val_dataset = CityScapes(mode='val',args=args)
+        print("Training on Cityscapes dataset")
+        train_dataset = CityScapes(mode,args)
+        val_dataset = CityScapes(mode='val',args=args)
     elif args.dataset_train=='GTA5':
-      dataset=GTA5(mode,args)
-      train_dataset,val_dataset=split_dataset(dataset)
+        print("Training on GTA5 dataset")
+        dataset=GTA5(mode,args)
+        train_dataset,val_dataset=split_dataset(dataset)
 
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,
@@ -249,6 +251,24 @@ def main():
                        shuffle=False,
                        num_workers=args.num_workers,
                        drop_last=False)
+
+    if args.dataset_test==args.dataset_train:
+        print(f"Testing on {args.dataset_test} dataset")
+        dataloader_test=dataloader_val
+    else:
+        if args.dataset_test=='GTA5':
+            print("Testing on GTA5 dataset")
+            dataset=GTA5(mode,args)
+        else:
+            print("Testing on Cityscapes dataset")
+            dataset=CityScapes(mode='val',args=args)
+
+        _,test_dataset=split_dataset(dataset)
+        dataloader_test = DataLoader(test_dataset,
+                    batch_size=1,
+                    shuffle=False,
+                    num_workers=args.num_workers,
+                    drop_last=False)
 
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
@@ -276,7 +296,7 @@ def main():
     ## train loop
     train(args, model, optimizer, dataloader_train, dataloader_val)
     # final test
-    val(args, model, dataloader_val)
+    val(args, model, dataloader_test)
 
 if __name__ == "__main__":
     main()

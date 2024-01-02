@@ -15,58 +15,52 @@ from tqdm import tqdm
 
 ###########################################################################################
 def split_dataset(toSplit):
-  indsToSplit = range(0, len(toSplit))
-  splitting = train_test_split(indsToSplit, train_size = 0.5, random_state = 42, stratify = None, shuffle = True)
-  train_indexes = splitting[0]
-  val_indexes = splitting[1]
-  return Subset(toSplit,train_indexes),Subset(toSplit,val_indexes)
+    indsToSplit = range(0, len(toSplit))
+    splitting = train_test_split(indsToSplit, train_size = 0.5, random_state = 42, stratify = None, shuffle = True)
+    train_indexes = splitting[0]
+    val_indexes = splitting[1]
+    return Subset(toSplit,train_indexes),Subset(toSplit,val_indexes)
 
 def one_hot_custom(label, label_info):
-  semantic_map = np.zeros(label.shape[:2],dtype=np.uint8)
-  # print("sematic shape",semantic_map.shape)
-  # print("label_shape",label.shape)
-  for info in label_info:
-   color = info[-3:]
-   class_map = np.all(label == color.reshape(1, 1,3), axis=2)
-   semantic_map[class_map] = info[0]
-  return semantic_map  #return a numpy array
+    semantic_map = np.zeros(label.shape[:2],dtype=np.uint8)
+    # print("sematic shape",semantic_map.shape)
+    # print("label_shape",label.shape)
+    for info in label_info:
+        color = info[-3:]
+        class_map = np.all(label == color.reshape(1, 1,3), axis=2)
+        semantic_map[class_map] = info[0]
+    return semantic_map  #return a numpy array
 
 def get_label_info_custom(csv_path):
-  # return label -> {label_name: [r_value, g_value, b_value, ...}
-  ann = pd.read_csv(csv_path)
-  label = []
-  for iter, row in ann.iterrows():
-    label_name = row["Name"]
-    label_id = row["ID"]
-    rgb_color = [row["R"],row["G"],row["B"]]
-    label.append( [label_id] +  rgb_color)
-  return np.array(label)
+    # return label -> {label_name: [r_value, g_value, b_value, ...}
+    ann = pd.read_csv(csv_path)
+    label = []
+    for iter, row in ann.iterrows():
+        label_name = row["Name"]
+        label_id = row["ID"]
+        rgb_color = [row["R"],row["G"],row["B"]]
+        label.append( [label_id] +  rgb_color)
+    return np.array(label)
 
 def from_RGB_to_LabelID(label_colored,path,height,width):
-  label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
-  index=1
-  label_list=[]
-  if not os.path.exists("/content/GTA5/TrainID"):
-    os.makedirs("/content/GTA5/TrainID")
-
-  if not os.listdir("/content/GTA5/TrainID"): #se la cartella è vuota
+    label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
+    index=1
+    label_list=[]
+    if not os.path.exists("/content/GTA5/TrainID"):
+        os.makedirs("/content/GTA5/TrainID")
     print("Generating LabelID..")
     for l in tqdm(label_colored):
-      with open(path+l, 'rb') as f:
-        img = Image.open(f)
-        img=img.convert("RGB").resize((width, height), Image.NEAREST)
-      conv_img=one_hot_custom(np.array(img),label_info)
-      conv_img = Image.fromarray(conv_img)
-      file_path =f"/content/GTA5/TrainID/{str(index).zfill(5)}.png"
-      label_list.append(f"TrainID/{str(index).zfill(5)}.png")
-      conv_img.convert('L').save(file_path)
-      index+=1
-  else:
-    print("Using labelID alredy generated")
-    for l in label_colored:
-      label_list.append(f"TrainID/{str(index).zfill(5)}.png")
-      index+=1
-  return label_list
+        file_path =f"/content/GTA5/TrainID/{str(index).zfill(5)}.png"
+        label_list.append(f"TrainID/{str(index).zfill(5)}.png")
+        if not os.path.exists(file_path):
+            with open(path+l, 'rb') as f:
+                img = Image.open(f)
+                img=img.convert("RGB").resize((width, height), Image.NEAREST)
+            conv_img=one_hot_custom(np.array(img),label_info)
+            conv_img = Image.fromarray(conv_img)
+            conv_img.convert('L').save(file_path)
+        index+=1
+    return label_list
 
 #################################################################################################
 
