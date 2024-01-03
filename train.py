@@ -9,8 +9,8 @@ import argparse
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
-from utils import poly_lr_scheduler
-from utils import reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
+from copy import deepcopy
+from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset, DataAugmentation
 from tqdm import tqdm
 from gta5 import GTA5
 
@@ -216,6 +216,9 @@ def parse_args():
     parse.add_argument('--dataset_test',
                       type=str,
                       default='Cityscapes')
+    parse.add_argument('--enable_da',
+                      type=bool,
+                      default=False)
 
 
     return parse.parse_args()
@@ -237,6 +240,16 @@ def main():
         print("Training on GTA5 dataset")
         dataset=GTA5(mode)
         train_dataset,val_dataset=split_dataset(dataset)
+        if args.enable_da:
+            data_augmentation=DataAugmentation()
+            new_train_dataset=deepcopy(train_dataset)
+            idx=len(dataset)+1
+            for _, (data, label) in enumerate(train_dataset):
+                if np.random.rand()<=0.5:
+                    img_path, lb_path=data_augmentation(data, label, idx )
+                    new_train_dataset.__add__((img_path, lb_path))
+                    idx+=1
+            train_dataset=new_train_dataset
 
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,

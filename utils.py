@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+from torchvision import transforms
 from torch.nn import functional as F
 from PIL import Image
 import numpy as np
@@ -61,6 +62,133 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
             conv_img.convert('L').save(file_path)
         index+=1
     return label_list
+
+class DataAugmentation(object):
+    def __init__(self):
+        self.file_path="/content/GTA5"
+
+    def __call__(self, image, label, idx):
+        method= np.random.choice([RandCrop(), HorizontalFlip(), VerticalFlip(), Jitter()]) #vertical flip ha senso?
+        image, label= method(image, label)
+        return self.save(image, label, idx)
+
+    def save(self, image, label, index):
+        image_path=f"{self.file_path}/images/{str(index).zfill(5)}.png"
+        conv_img = transforms.ToPILImage()(image)
+        conv_img.convert('RGB').save(image_path) 
+        label_path=f"{self.file_path}/TrainID/{str(index).zfill(5)}.png"
+        conv_label = Image.fromarray(label.numpy())
+        conv_label.convert('L').save(label_path)
+        return image_path, label_path
+
+    
+	
+class RandCrop(DataAugmentation):
+	"""Crop the given Image and label at a random location.
+
+	Args:
+		size (sequence or int): Desired output size of the crop. If size is an
+			int instead of sequence like (h, w), a square crop (size, size) is
+			made.
+		padding (int or sequence, optional): Optional padding on each border
+			of the image. Default is 0, i.e no padding. If a sequence of length
+			4 is provided, it is used to pad left, top, right, bottom borders
+			respectively.
+	"""
+	def __init__(self, seed=42, padding=255): 				# void class for padding
+		super(RandCrop, self).__init__()
+		self.padding = padding
+		self.size = None
+		random.seed(seed)
+
+
+	@staticmethod
+	def get_params(img, output_size):
+		h, w = img.shape
+		th, tw = output_size
+		if w == tw and h == th:
+			return 0, 0, h, w
+		i = random.randint(0, h - th)
+		j = random.randint(0, w - tw)
+		return i, j, th, tw
+
+	def __call__(self, img, label):
+	
+		height, width = label.shape
+		self.size = (height//2, width//2)
+
+		top = (height - self.size[0]) // 2
+		bottom = height - self.size[0] - top
+		left = (width - self.size[1]) // 2
+		right = width - self.size[1] - left
+
+		i, j, h, w = self.get_params(label, self.size)
+
+		cropped_image = torchvision.transforms.functional.crop(img, i, j, h, w)	
+		cropped_label = label[i:i + h, j:j + w]
+		
+		padded_image = torch.nn.functional.pad(cropped_image, (left, right, top, bottom), mode='constant', value=self.padding)
+		padded_label = torch.nn.functional.pad(cropped_label, (left, right, top, bottom), mode='constant', value=self.padding)
+
+		return padded_image, padded_label
+    
+	
+	def __str__(self):
+		return "Random crop"
+
+
+
+class HorizontalFlip(DataAugmentation):
+	"""Horizontal Flip of the given Image and label.
+
+	Args:
+				-
+	"""
+	def __init__(self):
+		super(HorizontalFlip, self).__init__()
+
+	def __call__(self, img, label):
+		flipped_image = torch.flip(img, dims=[2])
+		flipped_label = torch.flip(label, dims=[1])
+		return flipped_image, flipped_label
+	
+	def __str__(self):
+		return "Horizontal flip"
+	
+class VerticalFlip(DataAugmentation):
+	"""Vertical Flip of the given Image and label.
+
+	Args:
+				-
+	"""
+	def __init__(self):
+		super(VerticalFlip, self).__init__()
+
+	def __call__(self, img, label):
+		flipped_image = torch.flip(img, dims=[1])
+		flipped_label = torch.flip(label, dims=[0])
+		return flipped_image, flipped_label
+	
+	def __str__(self):
+		return "Vertical flip"
+	
+	
+class Jitter(DataAugmentation):
+	def __init__(self):
+		super(Jitter).__init__()
+
+	def __call__(self, img, label):
+		jitter_transform = transforms.Compose([
+			transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2),
+		])
+		# transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2)
+		jittered_image = jitter_transform(img)
+		return jittered_image, label
+	
+	def __str__(self):
+		return "Jitter"
+	
+
 
 #################################################################################################
 
