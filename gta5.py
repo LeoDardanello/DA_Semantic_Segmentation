@@ -40,14 +40,14 @@ class GTA5(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def __add__(self, path):
+    def add(self, path):
         self.data.append(path[0])
         self.label.append(path[1])
     
     def data_loader(self):
         data= []
         label = []
-        types = ["images/", "labels/"]
+        types = [ "labels/","images/"]
         
         for t in types:
             for root, dirs, files in os.walk(self.path+t):
@@ -58,6 +58,8 @@ class GTA5(Dataset):
                         data.append(relative_path)
                     else:
                         label.append(relative_path)
+                    if len(data)==len(label):
+                        break
         return sorted(data), sorted(label)
 
 

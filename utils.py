@@ -65,7 +65,7 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
 
 class DataAugmentation(object):
     def __init__(self):
-        self.file_path="/content/GTA5"
+        self.file_path="/content/GTA5/"
 
     def __call__(self, image, label, idx):
         method= np.random.choice([RandCrop(), HorizontalFlip(), VerticalFlip(), Jitter()]) #vertical flip ha senso?
@@ -73,12 +73,12 @@ class DataAugmentation(object):
         return self.save(image, label, idx)
 
     def save(self, image, label, index):
-        image_path=f"{self.file_path}/images/{str(index).zfill(5)}.png"
+        image_path=f"images/{str(index).zfill(5)}.png"
         conv_img = transforms.ToPILImage()(image)
-        conv_img.convert('RGB').save(image_path) 
-        label_path=f"{self.file_path}/TrainID/{str(index).zfill(5)}.png"
+        conv_img.convert('RGB').save(self.file_path+image_path) 
+        label_path=f"TrainID/{str(index).zfill(5)}.png"
         conv_label = Image.fromarray(label.numpy())
-        conv_label.convert('L').save(label_path)
+        conv_label.convert('L').save(self.file_path+label_path)
         return image_path, label_path
 
     
