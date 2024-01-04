@@ -68,9 +68,18 @@ class DataAugmentation(object):
         self.file_path="/content/GTA5/"
 
     def __call__(self, image, label, idx):
-        method= np.random.choice([RandCrop(), HorizontalFlip(), VerticalFlip(), Jitter()]) #vertical flip ha senso?
+        method= np.random.choice([RandCrop(), HorizontalFlip(), Jitter()])
         image, label= method(image, label)
         return self.save(image, label, idx)
+
+    def save(self, image, label, index):
+        image_path=f"images/{str(index).zfill(5)}.png"
+        conv_img = transforms.ToPILImage()(image)
+        conv_img.convert('RGB').save(self.file_path+image_path) 
+        label_path=f"TrainID/{str(index).zfill(5)}.png"
+        conv_label = Image.fromarray(label.numpy())
+        conv_label.convert('L').save(self.file_path+label_path)
+        return image_path, label_path
 
     
 	
@@ -117,7 +126,7 @@ class RandCrop(DataAugmentation):
 
 		cropped_image = torchvision.transforms.functional.crop(img, i, j, h, w)	
 		cropped_label = label[i:i + h, j:j + w]
-		
+		# better do resize
 		padded_image = torch.nn.functional.pad(cropped_image, (left, right, top, bottom), mode='constant', value=self.padding)
 		padded_label = torch.nn.functional.pad(cropped_label, (left, right, top, bottom), mode='constant', value=self.padding)
 
@@ -146,22 +155,22 @@ class HorizontalFlip(DataAugmentation):
 	def __str__(self):
 		return "Horizontal flip"
 	
-'''class VerticalFlip(DataAugmentation):
-	"""Vertical Flip of the given Image and label.
+# class VerticalFlip(DataAugmentation):
+# 	"""Vertical Flip of the given Image and label.
 
-	Args:
-				-
-	"""
-	def __init__(self):
-		super(VerticalFlip, self).__init__()
+# 	Args:
+# 				-
+# 	"""
+# 	def __init__(self):
+# 		super(VerticalFlip, self).__init__()
 
-	def __call__(self, img, label):
-		flipped_image = torch.flip(img, dims=[1])
-		flipped_label = torch.flip(label, dims=[0])
-		return flipped_image, flipped_label
+# 	def __call__(self, img, label):
+# 		flipped_image = torch.flip(img, dims=[1])
+# 		flipped_label = torch.flip(label, dims=[0])
+# 		return flipped_image, flipped_label
 	
-	def __str__(self):
-		return "Vertical flip"'''
+# 	def __str__(self):
+# 		return "Vertical flip"
 	
 	
 class Jitter(DataAugmentation):
