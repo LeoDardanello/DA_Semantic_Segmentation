@@ -64,22 +64,10 @@ def from_RGB_to_LabelID(label_colored,path,height,width):
     return label_list
 
 class DataAugmentation(object):
-    def __init__(self):
-        self.file_path="/content/GTA5/"
 
-    def __call__(self, image, label, idx):
+    def __call__(self, image, label):
         method= np.random.choice([RandCrop(), HorizontalFlip(), Jitter()])
-        image, label= method(image, label)
-        return self.save(image, label, idx)
-
-    def save(self, image, label, index):
-        image_path=f"images/{str(index).zfill(5)}.png"
-        conv_img = transforms.ToPILImage()(image)
-        conv_img.convert('RGB').save(self.file_path+image_path) 
-        label_path=f"TrainID/{str(index).zfill(5)}.png"
-        conv_label = Image.fromarray(label.numpy())
-        conv_label.convert('L').save(self.file_path+label_path)
-        return image_path, label_path
+        return method(image, label)
 
     
 	
@@ -95,42 +83,33 @@ class RandCrop(DataAugmentation):
 			4 is provided, it is used to pad left, top, right, bottom borders
 			respectively.
 	"""
-	def __init__(self, seed=42, padding=255): 				# void class for padding
+	def __init__(self, seed=42): 				# void class for padding
 		super(RandCrop, self).__init__()
-		self.padding = padding
 		self.size = None
 		random.seed(seed)
 
 
 	@staticmethod
-	def get_params(img, output_size):
-		h, w = img.shape
-		th, tw = output_size
+	def get_params(img, output_size, h, w):
+		tw, th = output_size
 		if w == tw and h == th:
 			return 0, 0, h, w
 		i = random.randint(0, h - th)
 		j = random.randint(0, w - tw)
-		return i, j, th, tw
+		return (j, i, j+tw, i+th)
+
 
 	def __call__(self, img, label):
-	
-		height, width = label.shape
-		self.size = (height//2, width//2)
+		#with PIL as input
+		w, h =label.size
+		self.size = w//2, h//2
 
-		top = (height - self.size[0]) // 2
-		bottom = height - self.size[0] - top
-		left = (width - self.size[1]) // 2
-		right = width - self.size[1] - left
+		crop_box= self.get_params(label, self.size, h, w)
 
-		i, j, h, w = self.get_params(label, self.size)
+		cropped_image = img.crop(crop_box).resize((w, h), Image.NEAREST)	
+		cropped_label = label.crop(crop_box).resize((w, h), Image.NEAREST)	
 
-		cropped_image = torchvision.transforms.functional.crop(img, i, j, h, w)	
-		cropped_label = label[i:i + h, j:j + w]
-		# better do resize
-		padded_image = torch.nn.functional.pad(cropped_image, (left, right, top, bottom), mode='constant', value=self.padding)
-		padded_label = torch.nn.functional.pad(cropped_label, (left, right, top, bottom), mode='constant', value=self.padding)
-
-		return padded_image, padded_label
+		return cropped_image, cropped_label
     
 	
 	def __str__(self):
@@ -148,8 +127,8 @@ class HorizontalFlip(DataAugmentation):
 		super(HorizontalFlip, self).__init__()
 
 	def __call__(self, img, label):
-		flipped_image = torch.flip(img, dims=[2])
-		flipped_label = torch.flip(label, dims=[1])
+		flipped_image = img.transpose(Image.FLIP_LEFT_RIGHT)
+		flipped_label = label.transpose(Image.FLIP_LEFT_RIGHT)
 		return flipped_image, flipped_label
 	
 	def __str__(self):

@@ -9,10 +9,10 @@ from pprint import pprint
 from PIL import Image
 import numpy as np
 import pandas as pd
-from utils import from_RGB_to_LabelID
+from utils import from_RGB_to_LabelID, DataAugmentation
 
 class GTA5(Dataset):
-    def __init__(self, mode):
+    def __init__(self, mode, enable_da=False):
         super(GTA5, self).__init__()
         self.path = "/content/GTA5/"
         self.mode = mode
@@ -24,6 +24,8 @@ class GTA5(Dataset):
         self.width = 1024
         self.height = 512
         self.label=from_RGB_to_LabelID(self.label_colored,self.path,self.height,self.width)
+        self.data_augmentation= DataAugmentation()
+        self.enable_da = enable_da
 
     def pil_loader(self, p, mode):
         with open(self.path+p, 'rb') as f:
@@ -33,16 +35,14 @@ class GTA5(Dataset):
     def __getitem__(self, idx):
         image = self.pil_loader(self.data[idx], 'RGB')
         label = self.pil_loader(self.label[idx], 'L')
+        if self.enable_da and np.random.rand()<=0.5:
+            image, label= self.data_augmentation(image, label)
         tensor_image = self.transform_data(image)
         tensor_label = torch.from_numpy(np.array(label))  
         return tensor_image, tensor_label 
 
     def __len__(self):
         return len(self.data)
-    
-    def add(self, path):
-        self.data.append(path[0])
-        self.label.append(path[1])
     
     def data_loader(self):
         data= []

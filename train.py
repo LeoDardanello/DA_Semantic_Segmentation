@@ -239,23 +239,9 @@ def main():
         val_dataset = CityScapes(mode='val')
     elif args.dataset_train=='GTA5':
         print("Training on GTA5 dataset")
-        dataset=GTA5(mode)
+        dataset=GTA5(mode, args.enable_da)
         train_dataset,val_dataset=split_dataset(dataset)
-        print(train_dataset)
-        if args.enable_da:
-            print("Starting data augmentation")
-            data_augmentation=DataAugmentation()
-            new_train_dataset=deepcopy(train_dataset)
-            idx=len(dataset)+1
-            
-            for _, (data, label) in tqdm(enumerate(train_dataset), total=len(train_dataset)):
-                if np.random.rand()<=0.5:
-                    img_path, lb_path=data_augmentation(data, label, idx )
-                    idx+=1
-                    new_train_dataset.dataset.add((img_path, lb_path))
-                    new_train_dataset.indices.append(len(new_train_dataset.dataset) - 1)       
-            train_dataset=new_train_dataset
-      
+        
 
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,
