@@ -277,11 +277,12 @@ def main():
         if args.dataset_test=='GTA5':
             print("Testing on GTA5 dataset")
             dataset=GTA5(mode)
+            _,test_dataset=split_dataset(dataset)
         else:
             print("Testing on Cityscapes dataset")
-            dataset=CityScapes(mode='val')
+            test_dataset=CityScapes(mode='val')
 
-        _,test_dataset=split_dataset(dataset)
+        
         dataloader_test = DataLoader(test_dataset,
                     batch_size=1,
                     shuffle=False,
@@ -312,7 +313,7 @@ def main():
         return None
 
     ## train loop
-    train(args, model, optimizer, dataloader_train, dataloader_val)
+    train(args, model, optimizer, dataloader_train, dataloader_test)
     # final test
     val(args, model, dataloader_test)
 
