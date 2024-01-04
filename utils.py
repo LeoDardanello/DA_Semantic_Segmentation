@@ -72,15 +72,6 @@ class DataAugmentation(object):
         image, label= method(image, label)
         return self.save(image, label, idx)
 
-    def save(self, image, label, index):
-        image_path=f"images/{str(index).zfill(5)}.png"
-        conv_img = transforms.ToPILImage()(image)
-        conv_img.convert('RGB').save(self.file_path+image_path) 
-        label_path=f"TrainID/{str(index).zfill(5)}.png"
-        conv_label = Image.fromarray(label.numpy())
-        conv_label.convert('L').save(self.file_path+label_path)
-        return image_path, label_path
-
     
 	
 class RandCrop(DataAugmentation):
@@ -155,7 +146,7 @@ class HorizontalFlip(DataAugmentation):
 	def __str__(self):
 		return "Horizontal flip"
 	
-class VerticalFlip(DataAugmentation):
+'''class VerticalFlip(DataAugmentation):
 	"""Vertical Flip of the given Image and label.
 
 	Args:
@@ -170,7 +161,7 @@ class VerticalFlip(DataAugmentation):
 		return flipped_image, flipped_label
 	
 	def __str__(self):
-		return "Vertical flip"
+		return "Vertical flip"'''
 	
 	
 class Jitter(DataAugmentation):
