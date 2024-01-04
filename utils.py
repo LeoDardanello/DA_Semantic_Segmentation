@@ -17,7 +17,7 @@ from tqdm import tqdm
 ###########################################################################################
 def split_dataset(toSplit):
     indsToSplit = range(0, len(toSplit))
-    splitting = train_test_split(indsToSplit, train_size = 0.5, random_state = 42, stratify = None, shuffle = True)
+    splitting = train_test_split(indsToSplit, train_size = 0.75, random_state = 42, stratify = None, shuffle = True)
     train_indexes = splitting[0]
     val_indexes = splitting[1]
     return Subset(toSplit,train_indexes),Subset(toSplit,val_indexes)

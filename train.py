@@ -236,11 +236,18 @@ def main():
     if args.dataset_train=='Cityscapes':
         print("Training on Cityscapes dataset")
         train_dataset = CityScapes(mode)
-        val_dataset = CityScapes(mode='val')
     elif args.dataset_train=='GTA5':
         print("Training on GTA5 dataset")
         dataset=GTA5(mode, args.enable_da)
-        train_dataset,val_dataset=split_dataset(dataset)
+        train_dataset,_=split_dataset(dataset)
+        
+    if args.dataset_test=='GTA5':
+        print("Testing on GTA5 dataset")
+        dataset=GTA5(mode)
+        _,test_dataset=split_dataset(dataset)
+    elif args.dataset_test=='Cityscapes':
+        print("Testing on Cityscapes dataset")
+        test_dataset=CityScapes(mode='val')
         
 
     dataloader_train = DataLoader(train_dataset,
@@ -250,30 +257,11 @@ def main():
                     pin_memory=False,
                     drop_last=True)
     
-    dataloader_val = DataLoader(val_dataset,
+    dataloader_test = DataLoader(test_dataset,
                        batch_size=1,
                        shuffle=False,
                        num_workers=args.num_workers,
                        drop_last=False)
-
-    if args.dataset_test==args.dataset_train:
-        print(f"Testing on {args.dataset_test} dataset")
-        dataloader_test=dataloader_val
-    else:
-        if args.dataset_test=='GTA5':
-            print("Testing on GTA5 dataset")
-            dataset=GTA5(mode)
-            _,test_dataset=split_dataset(dataset)
-        else:
-            print("Testing on Cityscapes dataset")
-            test_dataset=CityScapes(mode='val')
-
-        
-        dataloader_test = DataLoader(test_dataset,
-                    batch_size=1,
-                    shuffle=False,
-                    num_workers=args.num_workers,
-                    drop_last=False)
 
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
