@@ -14,7 +14,8 @@ from torch.utils.data.dataset import Subset
 from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset, DataAugmentation
 from tqdm import tqdm
 from gta5 import GTA5
-from discriminator import FCDiscriminator
+from torch.nn import functional as F
+from model.discriminator import FCDiscriminator
 
 logger = logging.getLogger()
 
@@ -58,8 +59,8 @@ def val(args, model, dataloader):
 
         return precision, miou
 
-
-def train(args, model, optimizer, dataloader_source, dataloader_target):
+# dataloader source= GTA train, dataloader target= Cityscapes train, dataloader test= Cityscapes val
+def train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test):
     writer = SummaryWriter(comment=''.format(args.optimizer))
 
     scaler = amp.GradScaler()
@@ -70,9 +71,9 @@ def train(args, model, optimizer, dataloader_source, dataloader_target):
     target_label = 1
     max_miou = 0
     step = 0
-    model_D1 = FCDiscriminator(num_classes=args.num_classes)
-    model_D2 = FCDiscriminator(num_classes=args.num_classes)
-    model_D3 = FCDiscriminator(num_classes=args.num_classes)
+    model_D = FCDiscriminator(num_classes=args.num_classes)
+    optimizer_D = torch.optim.Adam(model_D.parameters(), lr=0.001)
+    optimizer_D.zero_grad()
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
@@ -86,101 +87,63 @@ def train(args, model, optimizer, dataloader_source, dataloader_target):
             optimizer.zero_grad()
 
             with amp.autocast():
-                # train G
+                # compute segmentation loss
                 output, out16, out32 = model(data) 
                 loss1 = loss_func(output, label.squeeze(1))
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
                 loss = loss1 + loss2 + loss3 # aggiungere lambda??????
                 
-                #normalization
-                loss = loss / args.iter_size
-                loss.backward()
+                scaler.scale(loss).backward()
                 
-                # train G with target
+                # compute adversarial loss
                 _,batch_target = dataloader_target.__iter__().__next__()
                 img_target,_=batch_target
                 img_target=img_target.cuda()
 
-                output_tar, out16_tar, out32_tar = model(data)
+                _, _, out32_tar = model(data)
+          
+                D_out = model_D(F.softmax(out32_tar))
 
-                D_out1 = model_D1(F.softmax(output_tar))
-                D_out2 = model_D2(F.softmax(out16_tar))
-                D_out3 = model_D3(F.softmax(out32_tar))
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
+                loss = args.lamb * loss_D
 
-                loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).cuda())
-                loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).cuda())
-                loss_D3 = bce_loss(D_out3, torch.FloatTensor(D_out3.data.size()).fill_(source_label).cuda())
-                loss_D = loss_D1 + loss_D2 + loss_D3 #servono 3 Lambda?????
-
-                #normalization
-                loss = loss / args.iter_size #ITER SIZE??????? BOH
-                loss.backward()
-
+                scaler.scale(loss).backward()
+              
                 # train D
+
+                pred = out32.detach()
+
+                D_out = model_D(F.softmax(pred))
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
+
+                scaler.scale(loss_D).backward()
+             
+                pred = out32_tar.detach()
+
+                D_out = model_D(F.softmax(pred))
+     
+
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
                 
-                pred1 = output.detach()
-                pred2 = out16.detach()
-                pred3 = out32.detach()
+                scaler.scale(loss_D).backward()
 
-                D_out1 = model_D1(F.softmax(pred1))
-                D_out2 = model_D2(F.softmax(pred2))
-                D_out3 = model_D3(F.softmax(pred3))
+                scaler.step(optimizer)
+                scaler.step(optimizer_D)
+                scaler.update()
 
-                loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).cuda())
-                loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).cuda())
-                loss_D3 = bce_loss(D_out3, torch.FloatTensor(D_out3.data.size()).fill_(source_label).cuda())
-
-
-                # NORMALIZATION /3 ????????????
-
-                loss_D1.backward()
-                loss_D2.backward()
-                loss_D3.backward()
-
-                
-                loss_D_value1 += loss_D1.data.cpu().numpy()[0]
-                loss_D_value2 += loss_D2.data.cpu().numpy()[0]
-                loss_D_value3 += loss_D3.data.cpu().numpy()[0]
-
-                pred1 = output_tar.detach()
-                pred2 = out16_tar.detach()
-                pred3 = out32_tar.detach()
-
-                D_out1 = model_D1(F.softmax(pred1))
-                D_out2 = model_D2(F.softmax(pred2))
-                D_out3 = model_D3(F.softmax(pred3))
-
-                loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).cuda())
-                loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).cuda())
-                loss_D3 = bce_loss(D_out3, torch.FloatTensor(D_out3.data.size()).fill_(source_label).cuda())
-
-                # NORMALIZATION /3 ????????????
-
-                loss_D1.backward()
-                loss_D2.backward()
-                loss_D3.backward()
-
-                loss_D_value1 += loss_D1.data.cpu().numpy()[0]
-                loss_D_value2 += loss_D2.data.cpu().numpy()[0]
-                loss_D_value3 += loss_D3.data.cpu().numpy()[0]
-
-            # scaler.scale(loss).backward()
-            # scaler.step(optimizer)
-            # scaler.update()
-
-            # tq.update(args.batch_size)
+            tq.update(args.batch_size)
             # tq.set_postfix(loss='%.6f' % loss)
-            # step += 1
+            step += 1
             # writer.add_scalar('loss_step', loss, step)
             # loss_record.append(loss.item())
         tq.close()
-        optimizer.step()
-        optimizer_D1.step()
-        optimizer_D2.step()
-        loss_train_mean = np.mean(loss_record)
-        writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
-        print('loss for train : %f' % (loss_train_mean))
+
+ 
+        # loss_train_mean = np.mean(loss_record)
+        # writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
+        # print('loss for train : %f' % (loss_train_mean))
         if epoch % args.checkpoint_step == 0 and epoch != 0:
             import os
             if not os.path.isdir(args.save_model_path):
@@ -189,7 +152,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target):
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
 
         if epoch % args.validation_step == 0 and epoch != 0:
-            precision, miou = val(args, model, dataloader_val)
+            precision, miou = val(args, model, dataloader_test)
             if miou > max_miou:
                 max_miou = miou
                 import os
@@ -233,7 +196,7 @@ def parse_args():
                        default=False,
     )
     parse.add_argument('--num_epochs',
-                       type=int, default=300,
+                       type=int, default=50,
                        help='Number of epochs to train for')
     parse.add_argument('--epoch_start_i',
                        type=int,
@@ -245,27 +208,19 @@ def parse_args():
                        help='How often to save checkpoints (epochs)')
     parse.add_argument('--validation_step',
                        type=int,
-                       default=1,
+                       default=5,
                        help='How often to perform validation (epochs)')
-    parse.add_argument('--crop_height',
-                       type=int,
-                       default=512,
-                       help='Height of cropped/resized input image to modelwork')
-    parse.add_argument('--crop_width',
-                       type=int,
-                       default=1024,
-                       help='Width of cropped/resized input image to modelwork')
     parse.add_argument('--batch_size',
                        type=int,
-                       default=2,
+                       default=8,
                        help='Number of images in each batch')
     parse.add_argument('--learning_rate',
                         type=float,
-                        default=0.01,
+                        default=0.001,
                         help='learning rate used for train')
     parse.add_argument('--num_workers',
                        type=int,
-                       default=4,
+                       default=2,
                        help='num of workers')
     parse.add_argument('--num_classes',
                        type=int,
@@ -295,16 +250,13 @@ def parse_args():
                       dest='training_path',
                       type=str,
                       default='')
-    parse.add_argument('--dataset_train',
-                      type=str,
-                      default='Cityscapes')
-    parse.add_argument('--dataset_test',
-                      type=str,
-                      default='Cityscapes')
     parse.add_argument('--enable_da',
                       type=bool,
-                      default=False)
-
+                      default=True)
+    parse.add_argument('--lambda',
+                        type=float,
+                        default=0.1,
+                        help='lambda used for train in Adversarial Adaptation')
 
     return parse.parse_args()
 
@@ -316,25 +268,22 @@ def main():
     n_classes = args.num_classes
 
     mode = args.mode
-
-    if args.dataset_train=='Cityscapes':
-        print("Training on Cityscapes dataset")
-        train_dataset = CityScapes(mode)
-    elif args.dataset_train=='GTA5':
-        print("Training on GTA5 dataset")
-        dataset=GTA5(mode, args.enable_da)
-        train_dataset,_=split_dataset(dataset)
-        
-    if args.dataset_test=='GTA5':
-        print("Testing on GTA5 dataset")
-        dataset=GTA5(mode)
-        _,test_dataset=split_dataset(dataset)
-    elif args.dataset_test=='Cityscapes':
-        print("Testing on Cityscapes dataset")
-        test_dataset=CityScapes(mode='val')
+  
+    source_dataset = CityScapes(mode)
+    dataset=GTA5(mode, args.enable_da)
+    target_dataset,_=split_dataset(dataset)
+  
+    test_dataset=CityScapes(mode='val')
         
 
-    dataloader_train = DataLoader(train_dataset,
+    dataloader_source = DataLoader(source_dataset,
+                    batch_size=args.batch_size,
+                    shuffle=False,
+                    num_workers=args.num_workers,
+                    pin_memory=False,
+                    drop_last=True)
+    
+    dataloader_target = DataLoader(target_dataset,
                     batch_size=args.batch_size,
                     shuffle=False,
                     num_workers=args.num_workers,
@@ -342,10 +291,11 @@ def main():
                     drop_last=True)
     
     dataloader_test = DataLoader(test_dataset,
-                       batch_size=1,
-                       shuffle=False,
-                       num_workers=args.num_workers,
-                       drop_last=False)
+                    batch_size=args.batch_size,
+                    shuffle=False,
+                    num_workers=args.num_workers,
+                    pin_memory=False,
+                    drop_last=False)
 
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
@@ -371,7 +321,7 @@ def main():
         return None
 
     ## train loop
-    train(args, model, optimizer, dataloader_train, dataloader_test)
+    train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test)
     # final test
     val(args, model, dataloader_test)
 
