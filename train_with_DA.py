@@ -66,14 +66,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
     scaler = amp.GradScaler()
 
     loss_func = torch.nn.CrossEntropyLoss(ignore_index=255)
-    bce_loss = torch.nn.BCEWithLogitsLoss(ignore_index=255)
+    bce_loss = torch.nn.BCEWithLogitsLoss()
     source_label = 0
     target_label = 1
     max_miou = 0
     step = 0
     model_D = FCDiscriminator(num_classes=args.num_classes)
     optimizer_D = torch.optim.Adam(model_D.parameters(), lr=0.001)
-    optimizer_D.zero_grad()
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
@@ -81,10 +80,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         tq = tqdm(total=len(dataloader_source) * args.batch_size)
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
         loss_record = []
-        for i, (data, label) in enumerate(dataloader_source):
+        for i in range(min(len(dataloader_source),len(dataloader_target))):
+            _,batch_source = dataloader_source.__iter__().__next__()
+            data, label, _, _ = batch_source
             data = data.cuda()
             label = label.long().cuda()
             optimizer.zero_grad()
+            optimizer_D.zero_grad()
 
             with amp.autocast():
                 # compute segmentation loss
@@ -98,13 +100,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 
                 # compute adversarial loss
                 _,batch_target = dataloader_target.__iter__().__next__()
-                img_target,_=batch_target
+                img_target, _, _, _ = batch_target
                 img_target=img_target.cuda()
 
                 _, _, out32_tar = model(data)
           
                 D_out = model_D(F.softmax(out32_tar))
-
+                
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
                 loss = args.lamb * loss_D
 
@@ -125,7 +127,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 D_out = model_D(F.softmax(pred))
      
 
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
+                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).cuda())
                 
                 scaler.scale(loss_D).backward()
 
