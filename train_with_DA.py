@@ -26,7 +26,7 @@ def val(args, model, dataloader):
         model.eval()
         precision_record = []
         hist = np.zeros((args.num_classes, args.num_classes))
-        for i, (data, label) in enumerate(dataloader):
+        for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)):
             label = label.type(torch.LongTensor)
             data = data.cuda()
             label = label.long().cuda()
@@ -72,65 +72,80 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
     max_miou = 0
     step = 0
     model_D = FCDiscriminator(num_classes=args.num_classes)
+    model_D.train()
+    model_D.cuda()
     optimizer_D = torch.optim.Adam(model_D.parameters(), lr=0.001)
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
-        model.train()
-        tq = tqdm(total=len(dataloader_source) * args.batch_size)
+
+        tq = tqdm(total=min(len(dataloader_target),len(dataloader_source)) * args.batch_size)
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
         loss_record = []
-        for i in range(min(len(dataloader_source),len(dataloader_target))):
-            data, label= dataloader_source.__iter__().__next__()
+        for i, (source_data, target_data) in enumerate(zip(dataloader_source,dataloader_target)):
+        
+            data, label= source_data
+            img_target,_=target_data
+
             data = data.cuda()
+            img_target=img_target.cuda()
             label = label.long().cuda()
             optimizer.zero_grad()
             optimizer_D.zero_grad()
 
+            # compute segmentation loss
+
+            # don't accumulate grads in D
+            for param in model_D.parameters():
+                param.requires_grad = False
+
             with amp.autocast():
-                # compute segmentation loss
+                
                 output, out16, out32 = model(data) 
                 loss1 = loss_func(output, label.squeeze(1))
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
                 loss = loss1 + loss2 + loss3 # aggiungere lambda??????
                 
-                scaler.scale(loss).backward()
-                
+            scaler.scale(loss).backward()
+            
+            with amp.autocast():
                 # compute adversarial loss
-                img_target, _=dataloader_target.__iter__().__next__()
-                img_target=img_target.cuda()
-
-                _, _, out32_tar = model(data)
-                D_out = model_D(F.softmax(out32_tar))
+                out_tar, _, _r = model(data)
+                D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
                 loss = args.lamb * loss_D
-                print("passo")
-                scaler.scale(loss).backward()
+            scaler.scale(loss).backward()
               
-                # train D
+            # train D
 
-                pred = out32.detach()
+            # bring back requires_grad
+            for param in model_D.parameters():
+                param.requires_grad = True
 
-                D_out = model_D(pred)
+            pred = output.detach()
+            with amp.autocast():
+
+                D_out = model_D(F.softmax(pred, dim=1))
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
 
-                scaler.scale(loss_D).backward()
-             
-                pred = out32_tar.detach()
+            scaler.scale(loss_D).backward()
+            
+            pred = out_tar.detach()
 
-                D_out = model_D(F.softmax(pred))
-     
+            with amp.autocast():
 
+                D_out = model_D(F.softmax(pred, dim=1))
+    
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).cuda())
-                
-                scaler.scale(loss_D).backward()
+            
+            scaler.scale(loss_D).backward()
 
-                scaler.step(optimizer)
-                scaler.step(optimizer_D)
-                scaler.update()
+            scaler.step(optimizer)
+            scaler.step(optimizer_D)
+            scaler.update()
 
             tq.update(args.batch_size)
             # tq.set_postfix(loss='%.6f' % loss)
@@ -252,7 +267,7 @@ def parse_args():
     parse.add_argument('--enable_da',
                       type=bool,
                       default=True)
-    parse.add_argument('--lambda',
+    parse.add_argument('--lamb',
                         type=float,
                         default=0.1,
                         help='lambda used for train in Adversarial Adaptation')
@@ -290,10 +305,9 @@ def main():
                     drop_last=True)
     
     dataloader_test = DataLoader(test_dataset,
-                    batch_size=args.batch_size,
+                    batch_size=1,
                     shuffle=False,
                     num_workers=args.num_workers,
-                    pin_memory=False,
                     drop_last=False)
 
     ## model
