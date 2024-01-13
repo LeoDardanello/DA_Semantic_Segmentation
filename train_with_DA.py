@@ -81,8 +81,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
         loss_record = []
         for i in range(min(len(dataloader_source),len(dataloader_target))):
-            _,batch_source = dataloader_source.__iter__().__next__()
-            data, label, _, _ = batch_source
+            data, label= dataloader_source.__iter__().__next__()
             data = data.cuda()
             label = label.long().cuda()
             optimizer.zero_grad()
@@ -99,24 +98,22 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 scaler.scale(loss).backward()
                 
                 # compute adversarial loss
-                _,batch_target = dataloader_target.__iter__().__next__()
-                img_target, _, _, _ = batch_target
+                img_target, _=dataloader_target.__iter__().__next__()
                 img_target=img_target.cuda()
 
                 _, _, out32_tar = model(data)
-          
                 D_out = model_D(F.softmax(out32_tar))
                 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
                 loss = args.lamb * loss_D
-
+                print("passo")
                 scaler.scale(loss).backward()
               
                 # train D
 
                 pred = out32.detach()
 
-                D_out = model_D(F.softmax(pred))
+                D_out = model_D(pred)
 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
 
