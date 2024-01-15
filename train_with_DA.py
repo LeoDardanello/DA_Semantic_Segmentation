@@ -16,6 +16,7 @@ from tqdm import tqdm
 from gta5 import GTA5
 from torch.nn import functional as F
 from model.discriminator import FCDiscriminator
+import shutil
 
 logger = logging.getLogger()
 
@@ -72,12 +73,23 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
     max_miou = 0
     step = 0
     model_D = FCDiscriminator(num_classes=args.num_classes)
+    if torch.cuda.is_available() and args.use_gpu:
+        model_D = torch.nn.DataParallel(model_D).cuda()
+    
+    if args.training_path != '':   
+        token=args.training_path.split('/') 
+        token[-1]="discriminator_function_"+token[-1]
+        new_path='/'.join(token)
+        print("training discriminator function with "+ new_path)
+        model_D.module.load_state_dict(torch.load(new_path))
+    
     model_D.train()
-    model_D.cuda()
-    optimizer_D = torch.optim.Adam(model_D.parameters(), lr=0.001)
+
+    optimizer_D = torch.optim.Adam(model_D.parameters(), lr=args.learning_rate)
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
+        lr_d= poly_lr_scheduler(optimizer_D, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
 
         tq = tqdm(total=min(len(dataloader_target),len(dataloader_source)) * args.batch_size)
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
@@ -164,6 +176,12 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
+            torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
@@ -173,8 +191,21 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 os.makedirs(args.save_model_path, exist_ok=True)
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            filename=f'discriminator_function_best_epoch_{epoch}_.pth'
+            torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
+    import os
+    if not os.path.isdir(args.save_model_path):
+        os.mkdir(args.save_model_path)
+    filename=f'final_epoch.pth'
+    torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+    # Sposta il file zip su Google Drive
+    shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -312,14 +343,15 @@ def main():
 
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
-    
-    ## to load model
-    ## TO DO loading optimizer states, if optimizer uses other parameters than lr
-    if args.training_path != '':
-        model.module.load_state_dict(torch.load(args.training_path))
 
     if torch.cuda.is_available() and args.use_gpu:
         model = torch.nn.DataParallel(model).cuda()
+
+    ## to load model
+    ## TO DO loading optimizer states, if optimizer uses other parameters than lr
+    if args.training_path != '':
+        print("training model with "+ args.training_path)
+        model.module.load_state_dict(torch.load(args.training_path))
 
     ## optimizer
     # build optimizer
@@ -334,7 +366,10 @@ def main():
         return None
 
     ## train loop
-    train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test)
+    if mode!="test":
+        train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test)
+        
+   
     # final test
     val(args, model, dataloader_test)
 
