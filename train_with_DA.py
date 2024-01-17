@@ -16,6 +16,7 @@ from tqdm import tqdm
 from gta5 import GTA5
 from torch.nn import functional as F
 from model.discriminator import FCDiscriminator
+from FDA import  FDA 
 import shutil
 
 logger = logging.getLogger()
@@ -177,11 +178,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
             filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
@@ -192,11 +193,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
             filename=f'discriminator_function_best_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
   
@@ -295,6 +296,9 @@ def parse_args():
                         type=float,
                         default=0.1,
                         help='lambda used for train in Adversarial Adaptation')
+    parse.add_argument('--enable_FDA',
+                      type=bool,
+                      default=False)
 
     return parse.parse_args()
 
@@ -310,6 +314,9 @@ def main():
     source_dataset = CityScapes(mode)
     dataset=GTA5(mode, args.enable_da)
     target_dataset,_=split_dataset(dataset)
+
+    if args.enable_FDA:
+        source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label)
   
     test_dataset=CityScapes(mode='val')
         
