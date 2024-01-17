@@ -320,7 +320,7 @@ def main():
     source_dataset,_=split_dataset(dataset)
 
     if args.enable_FDA:
-        source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label, args.beta)
+        source_dataset= FDA(source_dataset.dataset.data, target_dataset.data, source_dataset.dataset.label, args.beta)
   
     test_dataset=CityScapes(mode='val')
         
