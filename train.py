@@ -14,6 +14,7 @@ from torch.utils.data.dataset import Subset
 from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset, DataAugmentation
 from tqdm import tqdm
 from gta5 import GTA5
+import shutil
 
 logger = logging.getLogger()
 
@@ -24,7 +25,7 @@ def val(args, model, dataloader):
         model.eval()
         precision_record = []
         hist = np.zeros((args.num_classes, args.num_classes))
-        for i, (data, label) in enumerate(dataloader):
+        for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)):
             label = label.type(torch.LongTensor)
             data = data.cuda()
             label = label.long().cuda()
@@ -103,6 +104,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/"+args.dataset_train+"/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
@@ -112,6 +114,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.makedirs(args.save_model_path, exist_ok=True)
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/"+args.dataset_train+"/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
 
@@ -266,13 +269,15 @@ def main():
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
     
+    
+
+    if torch.cuda.is_available() and args.use_gpu:
+        model = torch.nn.DataParallel(model).cuda()
+    
     ## to load model
     ## TO DO loading optimizer states, if optimizer uses other parameters than lr
     if args.training_path != '':
         model.module.load_state_dict(torch.load(args.training_path))
-
-    if torch.cuda.is_available() and args.use_gpu:
-        model = torch.nn.DataParallel(model).cuda()
 
     ## optimizer
     # build optimizer
@@ -285,9 +290,9 @@ def main():
     else:  # rmsprop
         print('not supported optimizer \n')
         return None
-
-    ## train loop
-    train(args, model, optimizer, dataloader_train, dataloader_test)
+    if mode=="train":
+        ## train loop
+        train(args, model, optimizer, dataloader_train, dataloader_test)
     # final test
     val(args, model, dataloader_test)
 

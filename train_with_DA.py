@@ -123,7 +123,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             
             with amp.autocast():
                 # compute adversarial loss
-                out_tar, _, _r = model(data)
+                out_tar, _, _ = model(data)
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
@@ -199,14 +199,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
-    import os
-    if not os.path.isdir(args.save_model_path):
-        os.mkdir(args.save_model_path)
-    filename=f'final_epoch.pth'
-    torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-    # Sposta il file zip su Google Drive
-    shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/")
-
+  
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
