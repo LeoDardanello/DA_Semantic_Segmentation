@@ -48,8 +48,6 @@ class FDA(Dataset):
   def __getitem__(self, idx):
     image = self.pil_loader(self.path+self.data[idx], 'RGB')
     label = self.pil_loader(self.path+self.label[idx], 'L')
-    if self.enable_da and np.random.rand()<=0.5:
-      image, label= self.data_augmentation(image, label)
     tensor_image = self.transform_data(image)
     tensor_label = torch.from_numpy(np.array(label))  
     return tensor_image, tensor_label 
