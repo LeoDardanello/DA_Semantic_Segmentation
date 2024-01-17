@@ -11,12 +11,12 @@ from utils import FourierDomainAdaptation
 from tqdm.auto import tqdm
 
 class FDA(Dataset):
-  def __init__(self, data_source, data_target, label_source):
+  def __init__(self, data_source, data_target, label_source, beta=0.01):
     super(FDA, self).__init__()
     self.path = "/content/GTA5/"
     self.width = 1024
     self.height = 512
-    self.data = self.to_FDA(data_source, data_target)
+    self.data = self.to_FDA(data_source, data_target, beta)
     self.label = label_source
     self.transform_data = transforms.Compose([ 
       transforms.ToTensor(),                 # Converte l'immagine in un tensore
@@ -28,12 +28,12 @@ class FDA(Dataset):
       img = Image.open(f)
       return img.convert(mode).resize((self.width, self.height), Image.NEAREST)
   
-  def to_FDA(self, data_source, data_target):
+  def to_FDA(self, data_source, data_target, beta):
     if not os.path.exists("/content/GTA5/FDA/"):
       os.makedirs("/content/GTA5/FDA/")
     print("Generating FDA images..")
     img_list = []
-    fda = FourierDomainAdaptation()
+    fda = FourierDomainAdaptation(beta)
     for i, (src, trg) in tqdm(enumerate(zip(data_source, data_target))):
       file_path =f"/content/GTA5/FDA/{str(i+1).zfill(5)}.png"
       img_list.append(f"FDA/{str(i+1).zfill(5)}.png")

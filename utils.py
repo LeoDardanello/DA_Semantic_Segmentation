@@ -168,6 +168,9 @@ class Jitter(DataAugmentation):
 # FDA: Fourier Domain Adaptation
 class FourierDomainAdaptation(object):
 
+	def __init__(self, beta=0.01):
+		self.beta = beta
+
 	def __call__(self, im_src, im_trg):
 		im_src = np.asarray(im_src, np.float32)
 		im_trg = np.asarray(im_trg, np.float32)
@@ -175,7 +178,7 @@ class FourierDomainAdaptation(object):
 		im_src = im_src.transpose((2, 0, 1))
 		im_trg = im_trg.transpose((2, 0, 1))
 
-		src_in_trg = self.FDA_source_to_target_np( im_src, im_trg, L=0.01 )
+		src_in_trg = self.FDA_source_to_target_np( im_src, im_trg, L=self.beta )
 		return src_in_trg.transpose((1, 2, 0))
 	
 	def extract_ampl_phase(self, fft_im):

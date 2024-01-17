@@ -299,6 +299,10 @@ def parse_args():
     parse.add_argument('--enable_FDA',
                       type=bool,
                       default=False)
+    parse.add_argument('--beta',
+                      type=float,
+                      default=0.01,
+                      help='beta used for train in Fourier Domain Adaptation')
 
     return parse.parse_args()
 
@@ -316,7 +320,7 @@ def main():
     source_dataset,_=split_dataset(dataset)
 
     if args.enable_FDA:
-        source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label)
+        source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label, args.beta)
   
     test_dataset=CityScapes(mode='val')
         
