@@ -311,9 +311,9 @@ def main():
 
     mode = args.mode
   
-    source_dataset = CityScapes(mode)
+    target_dataset = CityScapes(mode)
     dataset=GTA5(mode, args.enable_da)
-    target_dataset,_=split_dataset(dataset)
+    source_dataset,_=split_dataset(dataset)
 
     if args.enable_FDA:
         source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label)

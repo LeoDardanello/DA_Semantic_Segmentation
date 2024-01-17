@@ -176,16 +176,16 @@ class FourierDomainAdaptation(object):
 		im_trg = im_trg.transpose((2, 0, 1))
 
 		src_in_trg = self.FDA_source_to_target_np( im_src, im_trg, L=0.01 )
-		return src_in_trg
+		return src_in_trg.transpose((1, 2, 0))
 	
-	def extract_ampl_phase(fft_im):
+	def extract_ampl_phase(self, fft_im):
     # fft_im: size should be bx3xhxwx2
 		fft_amp = fft_im[:,:,:,:,0]**2 + fft_im[:,:,:,:,1]**2
 		fft_amp = torch.sqrt(fft_amp)
 		fft_pha = torch.atan2( fft_im[:,:,:,:,1], fft_im[:,:,:,:,0] )
 		return fft_amp, fft_pha
 
-	def low_freq_mutate( amp_src, amp_trg, L=0.1 ):
+	def low_freq_mutate(self, amp_src, amp_trg, L=0.1 ):
 			_, _, h, w = amp_src.size()
 			b = (  np.floor(np.amin((h,w))*L)  ).astype(int)     # get b
 			amp_src[:,:,0:b,0:b]     = amp_trg[:,:,0:b,0:b]      # top left
@@ -194,7 +194,7 @@ class FourierDomainAdaptation(object):
 			amp_src[:,:,h-b:h,w-b:w] = amp_trg[:,:,h-b:h,w-b:w]  # bottom right
 			return amp_src
 
-	def low_freq_mutate_np( amp_src, amp_trg, L=0.1 ):
+	def low_freq_mutate_np(self, amp_src, amp_trg, L=0.1 ):
 			a_src = np.fft.fftshift( amp_src, axes=(-2, -1) )
 			a_trg = np.fft.fftshift( amp_trg, axes=(-2, -1) )
 
