@@ -124,7 +124,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             
             with amp.autocast():
                 # compute adversarial loss
-                out_tar, _, _ = model(data)
+                out_tar, _, _ = model(img_target)
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
@@ -306,6 +306,19 @@ def parse_args():
 
     return parse.parse_args()
 
+import re
+
+def recover_split(toSplit, beta):
+    print('Recovering split for beta : ', beta)
+    train_indexes = []
+    file_path = f'/content/drive/MyDrive/AMLUtils/FDA_{beta}/source_data.txt'
+    with open(file_path, 'r') as file:
+        for line in file:
+            match = re.search(r'(\d{5})\.png', line)
+            if match:
+                numero = int(match.group(1))
+                train_indexes.append(numero-1)
+    return Subset(toSplit,train_indexes)
 
 def main():
     args = parse_args()
@@ -317,11 +330,33 @@ def main():
   
     target_dataset = CityScapes(mode)
     dataset=GTA5(mode, args.enable_da)
+    if args.enable_FDA:
+      source_dataset = recover_split(dataset, args.beta)
+      source_dataset = FDA(source_dataset, target_dataset.data, args.beta)
+    else:
+      source_dataset,_=split_dataset(dataset)
+
+    '''dataset=GTA5(mode, args.enable_da)
     source_dataset,_=split_dataset(dataset)
 
     if args.enable_FDA:
-        source_dataset= FDA(source_dataset.dataset.data, target_dataset.data, source_dataset.dataset.label, args.beta)
-  
+        try:
+            with open("/content/source_data.txt", 'w') as file:
+                for i in source_dataset.indices:
+                    file.write(source_dataset.dataset.data[i] + '\n')
+            print(f"Il vettore è stato salvato con successo nel file source_data.txt ")
+        except Exception as e:
+            print(f"Si è verificato un errore: {e}")
+        
+        try:
+            with open("/content/source_label.txt", 'w') as file:
+                for i in source_dataset.indices:
+                    file.write(source_dataset.dataset.label[i] + '\n')
+            print(f"Il vettore è stato salvato con successo nel file source_label.txt ")
+        except Exception as e:
+            print(f"Si è verificato un errore: {e}")
+        source_dataset= FDA(source_dataset.dataset.data, target_dataset.data, source_dataset.dataset.label, args.beta)'''
+    
     test_dataset=CityScapes(mode='val')
         
 
