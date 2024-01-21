@@ -96,8 +96,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
         loss_record = []
         for i, (source_data, target_data) in enumerate(zip(dataloader_source,dataloader_target)):
-        
-            data, label= source_data
+            
+            if args.enable_FDA:
+              data,label,data_fda=source_data
+              data_fda=data_fda.cuda()
+            else:
+              data, label= source_data
+
             img_target,_=target_data
 
             data = data.cuda()
@@ -112,19 +117,19 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             for param in model_D.parameters():
                 param.requires_grad = False
 
-            with amp.autocast():
-                
-                output, out16, out32 = model(data) 
+            with amp.autocast():        
+                output, out16, out32 = model(data_fda) if args.enable_FDA else model(data)
+ 
                 loss1 = loss_func(output, label.squeeze(1))
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
-                loss = loss1 + loss2 + loss3 # aggiungere lambda??????
+                loss = loss1 + loss2 + loss3 
                 
             scaler.scale(loss).backward()
             
             with amp.autocast():
                 # compute adversarial loss
-                out_tar, _, _ = model(data)
+                out_tar, _, _ = model(img_target)
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
@@ -132,12 +137,16 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             scaler.scale(loss).backward()
               
             # train D
+            with amp.autocast():
+                if args.enable_FDA: 
+                    output, _, _=model(data)
 
             # bring back requires_grad
             for param in model_D.parameters():
                 param.requires_grad = True
 
             pred = output.detach()
+
             with amp.autocast():
 
                 D_out = model_D(F.softmax(pred, dim=1))
@@ -161,16 +170,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             scaler.update()
 
             tq.update(args.batch_size)
-            # tq.set_postfix(loss='%.6f' % loss)
             step += 1
-            # writer.add_scalar('loss_step', loss, step)
-            # loss_record.append(loss.item())
+
         tq.close()
 
- 
-        # loss_train_mean = np.mean(loss_record)
-        # writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
-        # print('loss for train : %f' % (loss_train_mean))
+
         if epoch % args.checkpoint_step == 0 and epoch != 0:
             import os
             if not os.path.isdir(args.save_model_path):
@@ -178,11 +182,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
@@ -193,11 +197,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             filename=f'discriminator_function_best_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
   
@@ -306,6 +310,19 @@ def parse_args():
 
     return parse.parse_args()
 
+import re
+
+def recover_split(toSplit, beta):
+    print('Recovering split for beta : ', beta)
+    train_indexes = []
+    file_path = f'/content/drive/MyDrive/AMLUtils/FDA_{beta}/source_data.txt'
+    with open(file_path, 'r') as file:
+        for line in file:
+            match = re.search(r'(\d{5})\.png', line)
+            if match:
+                numero = int(match.group(1))
+                train_indexes.append(numero-1)
+    return Subset(toSplit,train_indexes)
 
 def main():
     args = parse_args()
@@ -317,11 +334,33 @@ def main():
   
     target_dataset = CityScapes(mode)
     dataset=GTA5(mode, args.enable_da)
+    if args.enable_FDA:
+      source_dataset = recover_split(dataset, args.beta)
+      source_dataset = FDA(source_dataset, target_dataset.data, args.beta)
+    else:
+      source_dataset,_=split_dataset(dataset)
+
+    '''dataset=GTA5(mode, args.enable_da)
     source_dataset,_=split_dataset(dataset)
 
     if args.enable_FDA:
-        source_dataset= FDA(source_dataset.data, target_dataset.data, source_dataset.label, args.beta)
-  
+        try:
+            with open("/content/source_data.txt", 'w') as file:
+                for i in source_dataset.indices:
+                    file.write(source_dataset.dataset.data[i] + '\n')
+            print(f"Il vettore è stato salvato con successo nel file source_data.txt ")
+        except Exception as e:
+            print(f"Si è verificato un errore: {e}")
+        
+        try:
+            with open("/content/source_label.txt", 'w') as file:
+                for i in source_dataset.indices:
+                    file.write(source_dataset.dataset.label[i] + '\n')
+            print(f"Il vettore è stato salvato con successo nel file source_label.txt ")
+        except Exception as e:
+            print(f"Si è verificato un errore: {e}")
+        source_dataset= FDA(source_dataset.dataset.data, target_dataset.data, source_dataset.dataset.label, args.beta)'''
+    
     test_dataset=CityScapes(mode='val')
         
 
