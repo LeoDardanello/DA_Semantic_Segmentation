@@ -97,7 +97,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         loss_record = []
         for i, (source_data, target_data) in enumerate(zip(dataloader_source,dataloader_target)):
         
-            data, label= source_data
+            
+            if args.enable_FDA:
+              data,label,data_fda=source_data
+              data_fda=data_fda.cuda()
+            else:
+              data, label= source_data
+
             img_target,_=target_data
 
             data = data.cuda()
@@ -115,10 +121,13 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             with amp.autocast():
                 
                 output, out16, out32 = model(data) 
+                if args.enable_FDA:
+                  out=output
+                  output, out16, out32 = model(data_fda) # train network with FDA images while keeping output of network with orignal images
                 loss1 = loss_func(output, label.squeeze(1))
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
-                loss = loss1 + loss2 + loss3 # aggiungere lambda??????
+                loss = loss1 + loss2 + loss3 
                 
             scaler.scale(loss).backward()
             
@@ -137,7 +146,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             for param in model_D.parameters():
                 param.requires_grad = True
 
-            pred = output.detach()
+            if args.enable_FDA: 
+              pred=out.detach()
+            else:
+              pred = output.detach()
+
             with amp.autocast():
 
                 D_out = model_D(F.softmax(pred, dim=1))
@@ -161,16 +174,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             scaler.update()
 
             tq.update(args.batch_size)
-            # tq.set_postfix(loss='%.6f' % loss)
             step += 1
-            # writer.add_scalar('loss_step', loss, step)
-            # loss_record.append(loss.item())
+
         tq.close()
 
- 
-        # loss_train_mean = np.mean(loss_record)
-        # writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
-        # print('loss for train : %f' % (loss_train_mean))
+
         if epoch % args.checkpoint_step == 0 and epoch != 0:
             import os
             if not os.path.isdir(args.save_model_path):
@@ -178,11 +186,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
@@ -193,11 +201,11 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             filename=f'discriminator_function_best_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/AdversarialDA/")
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
   
