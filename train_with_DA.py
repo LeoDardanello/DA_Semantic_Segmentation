@@ -62,7 +62,7 @@ def val(args, model, dataloader):
         return precision, miou
 
 # dataloader source= GTA train, dataloader target= Cityscapes train, dataloader test= Cityscapes val
-def train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test):
+def train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test, checkpoint=None):
     writer = SummaryWriter(comment=''.format(args.optimizer))
 
     scaler = amp.GradScaler()
@@ -78,15 +78,16 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         model_D = torch.nn.DataParallel(model_D).cuda()
     
     if args.training_path != '':   
-        token=args.training_path.split('/') 
-        token[-1]="discriminator_function_"+token[-1]
-        new_path='/'.join(token)
-        print("training discriminator function with "+ new_path)
-        model_D.module.load_state_dict(torch.load(new_path))
+        print("training discriminator function with "+ args.training_path)
+        model_D.module.load_state_dict(checkpoint['discriminator_function_dict'])
     
     model_D.train()
 
     optimizer_D = torch.optim.Adam(model_D.parameters(), lr=args.learning_rate)
+    
+    if args.training_path != '':
+        print("loading discriminator optimizer with "+ args.training_path)
+        optimizer_D.load_state_dict(checkpoint['optimizer_discriminator_dict'])
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
@@ -180,14 +181,30 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             if not os.path.isdir(args.save_model_path):
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
-            torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
+            torch.save({
+                'model_state_dict': model.module.state_dict(),
+                'discriminator_function_dict': model_D.module.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'optimizer_discriminator_dict': optimizer_D.state_dict(),
+            }, filename)
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
+
+            '''torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
             shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
             filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
             torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
             # Sposta il file zip su Google Drive
             shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-
+            filename=f'optimizer_latest_epoch_{epoch}_.pth'
+            torch.save(optimizer.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
+            filename=f'optimizer_D_latest_epoch_{epoch}_.pth'
+            torch.save(optimizer_D.state_dict(), os.path.join(args.save_model_path,filename))
+            # Sposta il file zip su Google Drive
+            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")'''
+            
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
             if miou > max_miou:
@@ -389,12 +406,14 @@ def main():
 
     if torch.cuda.is_available() and args.use_gpu:
         model = torch.nn.DataParallel(model).cuda()
-
+    
+    checkpoint = None
     ## to load model
     ## TO DO loading optimizer states, if optimizer uses other parameters than lr
     if args.training_path != '':
         print("training model with "+ args.training_path)
-        model.module.load_state_dict(torch.load(args.training_path))
+        checkpoint = torch.load(args.training_path)
+        model.module.load_state_dict(checkpoint['model_state_dict'])
 
     ## optimizer
     # build optimizer
@@ -407,10 +426,14 @@ def main():
     else:  # rmsprop
         print('not supported optimizer \n')
         return None
+    
+    if args.training_path != '':
+        print("loading optimizer with "+ args.training_path)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     ## train loop
     if mode!="test":
-        train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test)
+        train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test, checkpoint)
         
    
     # final test
