@@ -176,7 +176,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         tq.close()
 
 
-        if epoch % args.checkpoint_step == 0 and epoch != 0:
+        if epoch % args.checkpoint_step == 0 :
             import os
             if not os.path.isdir(args.save_model_path):
                 os.mkdir(args.save_model_path)
@@ -186,7 +186,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 'discriminator_function_dict': model_D.module.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'optimizer_discriminator_dict': optimizer_D.state_dict(),
-            }, filename)
+            },args.save_model_path+"/"+filename)
             shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
 
             '''torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
