@@ -152,9 +152,8 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
 
                 D_out = model_D(F.softmax(pred, dim=1))
 
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
+                loss_D_src = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
 
-            scaler.scale(loss_D).backward()
             
             pred = out_tar.detach()
 
@@ -162,8 +161,9 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
 
                 D_out = model_D(F.softmax(pred, dim=1))
     
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).cuda())
+                loss_D_trg = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).cuda())
             
+            loss_D = loss_D_src/2 + loss_D_trg/2
             scaler.scale(loss_D).backward()
 
             scaler.step(optimizer)
@@ -211,16 +211,16 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 max_miou = miou
                 import os
                 os.makedirs(args.save_model_path, exist_ok=True)
-            filename=f'best_epoch_{epoch}_.pth'
-            torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-            filename=f'discriminator_function_best_epoch_{epoch}_.pth'
-            torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-            writer.add_scalar('epoch/precision_val', precision, epoch)
-            writer.add_scalar('epoch/miou val', miou, epoch)
+                filename=f'best_epoch_{epoch}_.pth'
+                torch.save({
+                'model_state_dict': model.module.state_dict(),
+                'discriminator_function_dict': model_D.module.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'optimizer_discriminator_dict': optimizer_D.state_dict(),
+                },args.save_model_path+"/"+filename)
+                shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
+                writer.add_scalar('epoch/precision_val', precision, epoch)
+                writer.add_scalar('epoch/miou val', miou, epoch)
   
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
