@@ -7,7 +7,7 @@ import os
 from PIL import Image
 import numpy as np
 import pandas as pd
-from utils import FourierDomainAdaptation
+from utils import FourierDomainAdaptation, toimage
 from tqdm.auto import tqdm
 
 class FDA(Dataset):
@@ -43,7 +43,7 @@ class FDA(Dataset):
         src=self.pil_loader("/content/GTA5/"+src, "RGB")
         trg= self.pil_loader("/content/Cityscapes/Cityspaces/"+trg, "RGB")
         img = fda(src, trg)
-        conv_img = Image.fromarray(np.uint8(img))
+        conv_img = toimage(img, cmin=0.0, cmax=255.0)
         conv_img.save(file_path)
     return img_list
 
