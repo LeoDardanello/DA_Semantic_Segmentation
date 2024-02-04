@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 from model.model_stages import BiSeNet
-from cityscapes import CityScapes
+from datasets.cityscapes import CityScapes
 import torch
 from torch.utils.data import DataLoader
 import logging
@@ -9,11 +9,10 @@ import argparse
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
-from copy import deepcopy
 from torch.utils.data.dataset import Subset
-from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset, DataAugmentation
+from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
 from tqdm import tqdm
-from gta5 import GTA5
+from datasets.gta5 import GTA5
 import shutil
 
 logger = logging.getLogger()

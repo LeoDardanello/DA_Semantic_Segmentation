@@ -6,8 +6,7 @@ import torch
 import os
 from PIL import Image
 import numpy as np
-import pandas as pd
-from utils import FourierDomainAdaptation, toimage
+from my_utils import FourierDomainAdaptation, toimage
 from tqdm.auto import tqdm
 
 class FDA(Dataset):

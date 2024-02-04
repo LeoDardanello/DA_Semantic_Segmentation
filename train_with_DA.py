@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
 from model.model_stages import BiSeNet
-from cityscapes import CityScapes
+from datasets.cityscapes import CityScapes
 import torch
 from torch.utils.data import DataLoader
 import logging
@@ -9,15 +9,16 @@ import argparse
 import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
-from copy import deepcopy
 from torch.utils.data.dataset import Subset
-from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset, DataAugmentation
+from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
+from my_utils import adjust_learning_rate_D
 from tqdm import tqdm
-from gta5 import GTA5
+from datasets.gta5 import GTA5
 from torch.nn import functional as F
 from model.discriminator import FCDiscriminator
-from FDA import  FDA 
+from datasets.FDA import  FDA 
 import shutil
+from torch.autograd import Variable
 
 logger = logging.getLogger()
 
@@ -83,7 +84,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
     
     model_D.train()
 
-    optimizer_D = torch.optim.Adam(model_D.parameters(), lr=args.learning_rate)
+    optimizer_D = torch.optim.Adam(model_D.parameters(), lr=args.learning_rate, betas=(0.9, 0.99))
     
     if args.training_path != '':
         print("loading discriminator optimizer with "+ args.training_path)
@@ -91,8 +92,9 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
         lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
-        lr_d= poly_lr_scheduler(optimizer_D, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
-
+        adjust_learning_rate_D(optimizer_D, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
+        model.train()
+        model_D.train()
         tq = tqdm(total=min(len(dataloader_target),len(dataloader_source)) * args.batch_size)
         tq.set_description('epoch %d, lr %f' % (epoch, lr))
         loss_record = []
@@ -127,15 +129,20 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 loss = loss1 + loss2 + loss3 
                 
             scaler.scale(loss).backward()
+            tq.update(args.batch_size)
+            tq.set_postfix(loss='%.6f' % loss)
+            loss_record.append(loss.item())
             
             with amp.autocast():
                 # compute adversarial loss
                 out_tar, _, _ = model(img_target)
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
-                loss_D = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
+                loss_D = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
                 loss = args.lamb * loss_D
             scaler.scale(loss).backward()
+            scaler.step(optimizer)
+         
               
             # train D
             with amp.autocast():
@@ -149,32 +156,26 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             pred = output.detach()
 
             with amp.autocast():
-
                 D_out = model_D(F.softmax(pred, dim=1))
-
-                loss_D_src = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).cuda())
-
-            
+                loss_D_src = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
             pred = out_tar.detach()
 
             with amp.autocast():
-
                 D_out = model_D(F.softmax(pred, dim=1))
-    
-                loss_D_trg = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(target_label).cuda())
+                loss_D_trg = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(target_label)).cuda())
             
             loss_D = loss_D_src/2 + loss_D_trg/2
             scaler.scale(loss_D).backward()
 
-            scaler.step(optimizer)
             scaler.step(optimizer_D)
             scaler.update()
 
-            tq.update(args.batch_size)
             step += 1
-
+            writer.add_scalar('loss_step', loss, step)
         tq.close()
-
+        loss_train_mean = np.mean(loss_record)
+        writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
+        print('loss for train : %f' % (loss_train_mean))
 
         if epoch % args.checkpoint_step == 0 :
             import os
@@ -189,22 +190,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             },args.save_model_path+"/"+filename)
             shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
 
-            '''torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-            filename=f'discriminator_function_latest_epoch_{epoch}_.pth'
-            torch.save(model_D.module.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-            filename=f'optimizer_latest_epoch_{epoch}_.pth'
-            torch.save(optimizer.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
-            filename=f'optimizer_D_latest_epoch_{epoch}_.pth'
-            torch.save(optimizer_D.state_dict(), os.path.join(args.save_model_path,filename))
-            # Sposta il file zip su Google Drive
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")'''
-            
+  
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
             if miou > max_miou:
@@ -432,7 +418,7 @@ def main():
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     ## train loop
-    if mode!="test":
+    if mode=='train':
         train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test, checkpoint)
         
    
