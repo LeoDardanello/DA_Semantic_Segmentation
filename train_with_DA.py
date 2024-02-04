@@ -10,8 +10,8 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
 from torch.utils.data.dataset import Subset
-from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
-from my_utils import adjust_learning_rate_D
+from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu
+from my_utils import adjust_learning_rate,split_dataset
 from tqdm import tqdm
 from datasets.gta5 import GTA5
 from torch.nn import functional as F
@@ -91,8 +91,8 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         optimizer_D.load_state_dict(checkpoint['optimizer_discriminator_dict'])
 
     for epoch in range(args.epoch_start_i,args.num_epochs):
-        lr = poly_lr_scheduler(optimizer, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
-        adjust_learning_rate_D(optimizer_D, args.learning_rate, iter=epoch, max_iter=args.num_epochs)
+        lr=adjust_learning_rate(optimizer_D, args.learning_rate, epoch, max_iter=args.num_epochs)
+        _=adjust_learning_rate(optimizer,args.learning_rate, epoch, max_iter=args.num_epochs)
         model.train()
         model_D.train()
         tq = tqdm(total=min(len(dataloader_target),len(dataloader_source)) * args.batch_size)

@@ -41,7 +41,7 @@ def get_label_info_custom(csv_path):
     return np.array(label)
 
 def from_RGB_to_LabelID(label_colored,path,height,width):
-    label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/GTA.csv') 
+    label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/datasets/GTA.csv') 
     index=1
     label_list=[]
     if not os.path.exists("/content/GTA5/TrainID"):
@@ -386,8 +386,8 @@ class FourierDomainAdaptation(object):
 
 			return src_in_trg
 	
-def adjust_learning_rate_D(optimizer, iter, lr, max_iter, power=0.9):
-	lr = poly_lr_scheduler(optimizer, lr, iter= iter, max_iter=max_iter, power=power)
-	optimizer.param_groups[0]['lr'] = lr
+def adjust_learning_rate(optimizer, learning_rate,iter, max_iter, power=0.9):
+	lr = poly_lr_scheduler(optimizer, learning_rate, iter= iter, max_iter=max_iter, power=power)
 	if len(optimizer.param_groups) > 1:
 		optimizer.param_groups[1]['lr'] = lr * 10
+	return lr
