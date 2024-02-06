@@ -7,10 +7,11 @@ from utils import compute_global_accuracy, fast_hist, per_class_iu,reverse_one_h
 import numpy as np
 from datasets.cityscapes import CityScapes 
 from tqdm.auto import tqdm
-
+import copy
 
 def val_multi(args, model1, model2, model3, dataloader):
     # N.B: no need to apply transposition on the final output (i.e:output.transpose(1,2,0))
+    
     print('start val!')
     with torch.no_grad():
         model1.eval()
@@ -57,7 +58,61 @@ def val_multi(args, model1, model2, model3, dataloader):
         print('mIoU for validation: %.3f' % miou)
         print(f'mIoU per class: {miou_list}')
 
+  
+
         return precision, miou
+
+def generate_pseudo_labels(args,model1,model2,model3,dataloader):
+
+    predicted_label = np.zeros((len(dataloader), 512, 1024))
+    predicted_prob = np.zeros((len(dataloader), 512, 1024))
+
+    for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)):
+        label = label.type(torch.LongTensor)
+        data = data.cuda()
+        label = label.long().cuda()
+
+        # get RGB predict image
+        predict1, _, _ = model1(data)
+        predict1 = nn.functional.softmax(predict1, dim=1)
+        predict2, _, _ = model2(data)
+        predict2 = nn.functional.softmax(predict2, dim=1)
+        predict3, _, _ = model3(data)
+        predict3 = nn.functional.softmax(predict3, dim=1)
+        a, b, c = 0.3333, 0.3333, 0.3333
+        predict = a*predict1 + b*predict2 + c*predict3
+
+        label, prob = np.argmax(output, axis=2), np.max(output, axis=2)
+        predicted_label[index] = label.copy()
+        predicted_prob[index] = prob.copy()
+
+    # compute the threshold for each semantic class
+    thres = []
+    for i in range(19): 
+        x = predicted_prob[predicted_label==i]
+        if len(x) == 0:
+            thres.append(0)
+            continue        
+        x = np.sort(x)
+        thres.append(x[np.int(np.round(len(x)*0.66))])
+    print( thres )
+    thres = np.array(thres)
+    thres[thres>0.9]=0.9
+    print( thres )
+
+    # for each semantic class check if the predicted probability is greater than the threshold, if not set the class to void
+    for index in range(len(dataloader)):
+        name = image_name[index]
+        label = predicted_label[index]
+        prob = predicted_prob[index]
+        for i in range(19):
+            label[   (prob<thres[i]) * (label==i)   ] = 255  
+        output = np.asarray(label, dtype=np.uint8)
+        output = Image.fromarray(output)
+        file_path =f"/content/{str(index).zfill(5)}.png"
+        output.save(file_path)    
+
+    return
 
 def parse_args():
     parse = argparse.ArgumentParser()
@@ -143,6 +198,9 @@ def parse_args():
                       type=float,
                       default=0.01,
                       help='beta used for train in Fourier Domain Adaptation')
+    parse.add_argument('--generate_pseudo_labels',
+                      type=bool,
+                      default=False)
 
     return parse.parse_args()
 
