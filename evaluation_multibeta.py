@@ -1,9 +1,13 @@
 import torch 
+import torch.nn as nn
 from torch.autograd import Variable
 from model.model_stages import BiSeNet
 import argparse
-from utils import compute_global_accuracy, fast_hist, per_class_iu 
+from utils import compute_global_accuracy, fast_hist, per_class_iu,reverse_one_hot
 import numpy as np
+from datasets.cityscapes import CityScapes 
+from tqdm.auto import tqdm
+
 
 def val_multi(args, model1, model2, model3, dataloader):
     # N.B: no need to apply transposition on the final output (i.e:output.transpose(1,2,0))
@@ -142,12 +146,20 @@ def parse_args():
 
     return parse.parse_args()
 
+def str2bool(v):
+  if v.lower() in ('yes', 'true', 't', 'y', '1'):
+      return True
+  elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+      return False
+  else:
+      raise argparse.ArgumentTypeError('Unsupported value encountered.')
+
 if __name__ == '__main__':
     args = parse_args()
-
-    model1= Bisenet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
-    model2= Bisenet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
-    model3= Bisenet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
+    n_classes = args.num_classes
+    model1= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
+    model2= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
+    model3= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
     if torch.cuda.is_available() and args.use_gpu:
         model1 = torch.nn.DataParallel(model1).cuda()
         model2 = torch.nn.DataParallel(model2).cuda()
@@ -155,9 +167,9 @@ if __name__ == '__main__':
 
 
     print("training model with "+ args.training_path)
-    checkpoint1 = torch.load()
-    checkpoint2 = torch.load()
-    checkpoint3 = torch.load()
+    checkpoint1 = torch.load("/content/FDA_run_beta0.01/latest_epoch_49_.pth")
+    checkpoint2 = torch.load("/content/FDA_run_beta0.05/latest_epoch_49_.pth")
+    checkpoint3 = torch.load("/content/FDA_run_beta0.09/latest_epoch_49_.pth")
     model1.module.load_state_dict(checkpoint1['model_state_dict'])
     model2.module.load_state_dict(checkpoint2['model_state_dict'])
     model3.module.load_state_dict(checkpoint3['model_state_dict'])
