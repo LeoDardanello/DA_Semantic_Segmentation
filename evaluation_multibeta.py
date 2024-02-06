@@ -7,7 +7,7 @@ from utils import compute_global_accuracy, fast_hist, per_class_iu,reverse_one_h
 import numpy as np
 from datasets.cityscapes import CityScapes 
 from tqdm.auto import tqdm
-import copy
+from PIL import Image
 
 def val_multi(args, model1, model2, model3, dataloader):
     # N.B: no need to apply transposition on the final output (i.e:output.transpose(1,2,0))
@@ -64,27 +64,37 @@ def val_multi(args, model1, model2, model3, dataloader):
 
 def generate_pseudo_labels(args,model1,model2,model3,dataloader):
 
-    predicted_label = np.zeros((len(dataloader), 512, 1024))
+    predicted_label = np.zeros((len(dataloader)*args.batch_size, 512, 1024))
     predicted_prob = np.zeros((len(dataloader), 512, 1024))
 
-    for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)):
-        label = label.type(torch.LongTensor)
-        data = data.cuda()
-        label = label.long().cuda()
+    with torch.no_grad():
+      model1.eval()
+      model2.eval()
+      model3.eval()      
+      for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)*args.batch_size):
+          label = label.type(torch.LongTensor)
+          data = data.cuda()
+          label = label.long().cuda()
 
-        # get RGB predict image
-        predict1, _, _ = model1(data)
-        predict1 = nn.functional.softmax(predict1, dim=1)
-        predict2, _, _ = model2(data)
-        predict2 = nn.functional.softmax(predict2, dim=1)
-        predict3, _, _ = model3(data)
-        predict3 = nn.functional.softmax(predict3, dim=1)
-        a, b, c = 0.3333, 0.3333, 0.3333
-        predict = a*predict1 + b*predict2 + c*predict3
+          # get RGB predict image
+          predict1, _, _ = model1(data)
+          predict1 = nn.functional.softmax(predict1, dim=1)
+          predict2, _, _ = model2(data)
+          predict2 = nn.functional.softmax(predict2, dim=1)
+          predict3, _, _ = model3(data)
+          predict3 = nn.functional.softmax(predict3, dim=1)
+          a, b, c = 0.3333, 0.3333, 0.3333
+          predict = a*predict1 + b*predict2 + c*predict3
 
-        label, prob = np.argmax(output, axis=2), np.max(output, axis=2)
-        predicted_label[index] = label.copy()
-        predicted_prob[index] = prob.copy()
+          predict = nn.functional.interpolate(predict, (512, 1024), mode='bilinear', align_corners=True).cpu().data[0].numpy()
+
+          # print("predict_size",predict.shape)
+          label=np.argmax(predict, axis=0)
+          prob=np.max(predict, axis=0)
+          # print("predict_label_size",predicted_label.shape)
+          # print("label_size",label.shape)
+          predicted_label[i] = label.copy()
+          predicted_prob[i] = prob.copy()
 
     # compute the threshold for each semantic class
     thres = []
@@ -102,14 +112,13 @@ def generate_pseudo_labels(args,model1,model2,model3,dataloader):
 
     # for each semantic class check if the predicted probability is greater than the threshold, if not set the class to void
     for index in range(len(dataloader)):
-        name = image_name[index]
         label = predicted_label[index]
         prob = predicted_prob[index]
         for i in range(19):
             label[   (prob<thres[i]) * (label==i)   ] = 255  
         output = np.asarray(label, dtype=np.uint8)
         output = Image.fromarray(output)
-        file_path =f"/content/{str(index).zfill(5)}.png"
+        file_path =f"/content/PseudoLabel/{str(index).zfill(5)}.png"
         output.save(file_path)    
 
     return
@@ -215,6 +224,7 @@ def str2bool(v):
 if __name__ == '__main__':
     args = parse_args()
     n_classes = args.num_classes
+    args.batch_size=1
     model1= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
     model2= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
     model3= BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
@@ -232,8 +242,18 @@ if __name__ == '__main__':
     model2.module.load_state_dict(checkpoint2['model_state_dict'])
     model3.module.load_state_dict(checkpoint3['model_state_dict'])
 
-    dataset=CityScapes(mode='val')
+    # dataset=CityScapes(mode='val')
 
+    # dataloader= torch.utils.data.DataLoader(
+    #                 dataset=dataset,
+    #                 batch_size=1,
+    #                 shuffle=False,
+    #                 num_workers=args.num_workers
+    #             )
+
+    # val_multi(args, model1, model2, model3, dataloader)
+
+    dataset=CityScapes(mode="train")
     dataloader= torch.utils.data.DataLoader(
                     dataset=dataset,
                     batch_size=1,
@@ -241,6 +261,5 @@ if __name__ == '__main__':
                     num_workers=args.num_workers
                 )
 
-    val_multi(args, model1, model2, model3, dataloader)
-
+    generate_pseudo_labels(args,model1,model2,model3,dataloader)
 
