@@ -106,7 +106,10 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             else:
               data, label= source_data
 
-            img_target,_=target_data
+            if args.use_pseudo_label:
+                img_target,pseudo_label =target_data
+            else:
+                img_target,_=target_data
 
             data = data.cuda()
             img_target=img_target.cuda()
@@ -135,15 +138,21 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             
             with amp.autocast():
                 # compute adversarial loss
-                out_tar, _, _ = model(img_target)
+                out_tar, out16_tar, out32_tar = model(img_target)
+                if args.use_pseudo_label:
+                    loss1 = loss_func(out_tar, pseudo_label.squeeze(1))
+                    loss2 = loss_func(out16_tar, pseudo_label.squeeze(1))
+                    loss3 = loss_func(out32_tar, pseudo_label.squeeze(1))
+                    loss = loss1 + loss2 + loss3 
+                    scaler.scale(loss).backward()
+
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
                 loss = args.lamb * loss_D
             scaler.scale(loss).backward()
             scaler.step(optimizer)
-         
-              
+                  
             # train D
             with amp.autocast():
                 if args.enable_FDA: 
@@ -310,6 +319,10 @@ def parse_args():
                       type=float,
                       default=0.01,
                       help='beta used for train in Fourier Domain Adaptation')
+    parse.add_argument('--use_pseudo_label',
+                      type=bool,
+                      default=False,
+                      help='use pseudo label?')
 
     return parse.parse_args()
 
@@ -335,7 +348,7 @@ def main():
 
     mode = args.mode
   
-    target_dataset = CityScapes(mode)
+    target_dataset = CityScapes(mode, args.use_pseudo_label)
     dataset=GTA5(mode, args.enable_da)
     if args.enable_FDA:
       source_dataset = recover_split(dataset, args.beta)
