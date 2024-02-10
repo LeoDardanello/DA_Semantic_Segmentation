@@ -108,6 +108,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
 
             if args.use_pseudo_label:
                 img_target,pseudo_label =target_data
+                pseudo_label=pseudo_label.long().cuda()
             else:
                 img_target,_=target_data
 
@@ -130,27 +131,24 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
                 loss = loss1 + loss2 + loss3 
-                
-            scaler.scale(loss).backward()
-            tq.update(args.batch_size)
-            tq.set_postfix(loss='%.6f' % loss)
-            loss_record.append(loss.item())
-            
-            with amp.autocast():
+
                 # compute adversarial loss
                 out_tar, out16_tar, out32_tar = model(img_target)
                 if args.use_pseudo_label:
                     loss1 = loss_func(out_tar, pseudo_label.squeeze(1))
                     loss2 = loss_func(out16_tar, pseudo_label.squeeze(1))
                     loss3 = loss_func(out32_tar, pseudo_label.squeeze(1))
-                    loss = loss1 + loss2 + loss3 
-                    scaler.scale(loss).backward()
-
+                    loss += loss1 + loss2 + loss3 
+             
                 D_out = model_D(F.softmax(out_tar, dim=1))
                 
                 loss_D = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
-                loss = args.lamb * loss_D
+                loss += args.lamb * loss_D
+                
             scaler.scale(loss).backward()
+            tq.update(args.batch_size)
+            tq.set_postfix(loss='%.6f' % loss)
+            loss_record.append(loss.item())
             scaler.step(optimizer)
                   
             # train D

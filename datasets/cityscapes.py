@@ -21,21 +21,19 @@ class CityScapes(Dataset):
         ])
         self.width = 1024
         self.height = 512
-        
-
-        
+              
     def __getitem__(self, idx):
         
-        image = self.pil_loader(self.data[idx],  'RGB')
-        label = self.pil_loader(self.label[idx],  'L')
+        image = self.pil_loader(self.data[idx],  'RGB')  
         tensor_image = self.transform_data(image)
-        tensor_label =torch.from_numpy(np.array(label))
 
         if self.use_pseudo_label:
             pseudo_label = self.pil_loader(self.pseudo_label[idx],  'L')
             tensor_pseudo_label=torch.from_numpy(np.array(pseudo_label))
             return tensor_image, tensor_pseudo_label
-        
+
+        label = self.pil_loader(self.label[idx],  'L')
+        tensor_label =torch.from_numpy(np.array(label))
         return tensor_image, tensor_label
 
     def __len__(self):
@@ -58,13 +56,14 @@ class CityScapes(Dataset):
                 for root, dirs, files in os.walk(self.path+t):
                     if self.mode in root or self.use_pseudo_label:
                         for file in files:
-                            file_path = os.path.join(root, file)
+                            file_path = os.path.join(root, file) 
                             # get path in mode
                             relative_path = os.path.relpath(file_path, self.path)
-                            if t=="images/":
+                            if self.mode in root and t=="images/":
                                 data.append(relative_path)
-                            elif file_path.split("gtFine_")[1] == "labelTrainIds.png":
-                                label.append(relative_path)
                             elif self.use_pseudo_label and t=="pseudolbl/":
                                 pseudo_label.append(relative_path)
+                            elif self.mode in root and file_path.split("gtFine_")[1] == "labelTrainIds.png":
+                                label.append(relative_path)
+   
         return sorted(data), sorted(label), sorted(pseudo_label)
