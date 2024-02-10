@@ -40,6 +40,18 @@ def get_label_info_custom(csv_path):
         label.append( [label_id] +  rgb_color)
     return np.array(label)
 
+def from_LabelID_to_RGB(image, name):
+    label_values=get_label_info_custom('/content/DA_Semantic_Segmentation/datasets/GTA.csv') 
+    w = image.shape[0]
+    h = image.shape[1]
+    x = np.zeros([w,h,3], dtype=np.uint8)
+    colour_codes = [key[-3:] for key in label_values]
+    for i in range(0, w):
+        for j in range(0, h):
+            x[i, j, :] = colour_codes[int(image[i, j]) if int(image[i, j])!=255 else 19] 
+    rgb_image=Image.fromarray(x)
+    rgb_image.save(name)
+
 def from_RGB_to_LabelID(label_colored,path,height,width):
     label_info = get_label_info_custom('/content/DA_Semantic_Segmentation/datasets/GTA.csv') 
     index=1
