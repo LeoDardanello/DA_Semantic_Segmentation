@@ -7,6 +7,7 @@ from utils import compute_global_accuracy, fast_hist, per_class_iu,reverse_one_h
 import numpy as np
 from datasets.cityscapes import CityScapes 
 from tqdm.auto import tqdm
+import os
 from PIL import Image
 
 def val_multi(args, model1, model2, model3, dataloader):
@@ -118,6 +119,8 @@ def generate_pseudo_labels(args,model1,model2,model3,dataloader):
             label[   (prob<thres[i]) * (label==i)   ] = 255  
         output = np.asarray(label, dtype=np.uint8)
         output = Image.fromarray(output)
+        if not os.path.exist("/content/PseudoLabel"):
+          os.makedirs("/content/PseudoLabel")
         file_path =f"/content/PseudoLabel/{str(index).zfill(5)}.png"
         output.save(file_path)    
 
@@ -210,6 +213,9 @@ def parse_args():
     parse.add_argument('--generate_pseudo_labels',
                       type=bool,
                       default=False)
+    parse.add_argument('--use',
+                  type=str,
+                  default="evalmulti")
 
     return parse.parse_args()
 
@@ -242,24 +248,26 @@ if __name__ == '__main__':
     model2.module.load_state_dict(checkpoint2['model_state_dict'])
     model3.module.load_state_dict(checkpoint3['model_state_dict'])
 
-    # dataset=CityScapes(mode='val')
+    if args.use=="evalmulti":
+      dataset=CityScapes(mode='val')
 
-    # dataloader= torch.utils.data.DataLoader(
-    #                 dataset=dataset,
-    #                 batch_size=1,
-    #                 shuffle=False,
-    #                 num_workers=args.num_workers
-    #             )
+      dataloader= torch.utils.data.DataLoader(
+                      dataset=dataset,
+                      batch_size=1,
+                      shuffle=False,
+                      num_workers=args.num_workers
+                  )
 
-    # val_multi(args, model1, model2, model3, dataloader)
+      val_multi(args, model1, model2, model3, dataloader)
+    
+    elif args.use=="generatepseudo":
+      dataset=CityScapes(mode="train")
+      dataloader= torch.utils.data.DataLoader(
+                      dataset=dataset,
+                      batch_size=1,
+                      shuffle=False,
+                      num_workers=args.num_workers
+                  )
 
-    dataset=CityScapes(mode="train")
-    dataloader= torch.utils.data.DataLoader(
-                    dataset=dataset,
-                    batch_size=1,
-                    shuffle=False,
-                    num_workers=args.num_workers
-                )
-
-    generate_pseudo_labels(args,model1,model2,model3,dataloader)
+      generate_pseudo_labels(args,model1,model2,model3,dataloader)
 
