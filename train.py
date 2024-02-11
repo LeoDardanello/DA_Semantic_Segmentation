@@ -10,7 +10,8 @@ import numpy as np
 from tensorboardX import SummaryWriter
 import torch.cuda.amp as amp
 from torch.utils.data.dataset import Subset
-from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu, split_dataset
+from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu
+from my_utils import split_dataset
 from tqdm import tqdm
 from datasets.gta5 import GTA5
 import shutil
@@ -103,7 +104,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/"+args.dataset_train+"/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/GTA5_normal/")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
@@ -113,7 +114,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.makedirs(args.save_model_path, exist_ok=True)
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/"+args.dataset_train+"/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/GTA5_normal/")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
 
