@@ -304,14 +304,14 @@ def parse_args():
                       type=str,
                       default='')
     parse.add_argument('--enable_da',
-                      type=bool,
-                      default=True)
+                      type=str2bool,
+                      default=False)
     parse.add_argument('--lamb',
                         type=float,
                         default=0.1,
                         help='lambda used for train in Adversarial Adaptation')
     parse.add_argument('--enable_FDA',
-                      type=bool,
+                      type=str2bool,
                       default=False)
     parse.add_argument('--beta',
                       type=float,

@@ -126,6 +126,15 @@ def generate_pseudo_labels(args,model1,model2,model3,dataloader):
 
     return
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Unsupported value encountered.')
+
+
 def parse_args():
     parse = argparse.ArgumentParser()
 
@@ -197,21 +206,21 @@ def parse_args():
                       type=str,
                       default='')
     parse.add_argument('--enable_da',
-                      type=bool,
-                      default=True)
+                      type=str2bool,
+                      default=False)
     parse.add_argument('--lamb',
                         type=float,
                         default=0.1,
                         help='lambda used for train in Adversarial Adaptation')
     parse.add_argument('--enable_FDA',
-                      type=bool,
+                      type=str2bool,
                       default=False)
     parse.add_argument('--beta',
                       type=float,
                       default=0.01,
                       help='beta used for train in Fourier Domain Adaptation')
     parse.add_argument('--generate_pseudo_labels',
-                      type=bool,
+                      type=str2bool,
                       default=False)
     parse.add_argument('--use',
                   type=str,

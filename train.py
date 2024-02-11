@@ -104,7 +104,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/GTA5_normal/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/GTA5_Cityscapes_NoDataAug")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
@@ -114,7 +114,7 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.makedirs(args.save_model_path, exist_ok=True)
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/GTA5_normal/")
+            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/GTA5_Cityscapes_NoDataAug")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
 
@@ -221,7 +221,7 @@ def parse_args():
                       type=str,
                       default='Cityscapes')
     parse.add_argument('--enable_da',
-                      type=bool,
+                      type=str2bool,
                       default=False)
 
 
