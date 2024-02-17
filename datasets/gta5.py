@@ -15,7 +15,7 @@ class GTA5(Dataset):
         self.mode = mode
         self.data, self.label_colored = self.data_loader()
         self.transform_data = transforms.Compose([ 
-            transforms.ToTensor(),                 # Converte l'immagine in un tensore
+            transforms.ToTensor(),                 # Converts the image to a tensor
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
         self.width = 1024
@@ -33,6 +33,7 @@ class GTA5(Dataset):
         image = self.pil_loader(self.data[idx], 'RGB')
         label = self.pil_loader(self.label[idx], 'L')
         if self.enable_da and np.random.rand()<=0.5:
+            # Apply data augmentation
             image, label= self.data_augmentation(image, label)
         tensor_image = self.transform_data(image)
         tensor_label = torch.from_numpy(np.array(label))  

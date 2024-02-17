@@ -16,7 +16,7 @@ class CityScapes(Dataset):
         self.use_pseudo_label= use_pseudo_label
         self.data, self.label, self.pseudo_label = self.data_loader()
         self.transform_data = transforms.Compose([ 
-            transforms.ToTensor(),                 # Converte l'immagine in un tensore
+            transforms.ToTensor(),                 # Converts the image to a tensor
             transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
         ])
         self.width = 1024
@@ -28,6 +28,7 @@ class CityScapes(Dataset):
         tensor_image = self.transform_data(image)
 
         if self.use_pseudo_label:
+            # Load pseudo label
             pseudo_label = self.pil_loader(self.pseudo_label[idx],  'L')
             tensor_pseudo_label=torch.from_numpy(np.array(pseudo_label))
             return tensor_image, tensor_pseudo_label
