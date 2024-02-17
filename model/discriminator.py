@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+# FCD discriminator from the paper "Learning to Adapt Structured Output Space for Semantic Segmentation"
 class FCDiscriminator(nn.Module):
 
 	def __init__(self, num_classes, ndf = 64):

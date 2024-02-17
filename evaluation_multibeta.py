@@ -11,8 +11,7 @@ import os
 from PIL import Image
 
 def val_multi(args, model1, model2, model3, dataloader):
-    # N.B: no need to apply transposition on the final output (i.e:output.transpose(1,2,0))
-    
+ 
     print('start val!')
     with torch.no_grad():
         model1.eval()
@@ -25,13 +24,15 @@ def val_multi(args, model1, model2, model3, dataloader):
             data = data.cuda()
             label = label.long().cuda()
 
-            # get RGB predict image
+            # get RGB predict image from the three models
             predict1, _, _ = model1(data)
             predict1 = nn.functional.softmax(predict1, dim=1)
             predict2, _, _ = model2(data)
             predict2 = nn.functional.softmax(predict2, dim=1)
             predict3, _, _ = model3(data)
             predict3 = nn.functional.softmax(predict3, dim=1)
+
+            # average of the three predictions
             a, b, c = 0.3333, 0.3333, 0.3333
             predict = a*predict1 + b*predict2 + c*predict3
 
@@ -46,10 +47,6 @@ def val_multi(args, model1, model2, model3, dataloader):
             # compute per pixel accuracy
             precision = compute_global_accuracy(predict, label)
             hist += fast_hist(label.flatten(), predict.flatten(), args.num_classes)
-
-            # there is no need to transform the one-hot array to visual RGB array
-            # predict = colour_code_segmentation(np.array(predict), label_info)
-            # label = colour_code_segmentation(np.array(label), label_info)
             precision_record.append(precision)
 
         precision = np.mean(precision_record)
@@ -58,9 +55,6 @@ def val_multi(args, model1, model2, model3, dataloader):
         print('precision per pixel for test: %.3f' % precision)
         print('mIoU for validation: %.3f' % miou)
         print(f'mIoU per class: {miou_list}')
-
-  
-
         return precision, miou
 
 def generate_pseudo_labels(args,model1,model2,model3,dataloader):
@@ -77,23 +71,21 @@ def generate_pseudo_labels(args,model1,model2,model3,dataloader):
           data = data.cuda()
           label = label.long().cuda()
 
-          # get RGB predict image
+          # get RGB predict image for each model
           predict1, _, _ = model1(data)
           predict1 = nn.functional.softmax(predict1, dim=1)
           predict2, _, _ = model2(data)
           predict2 = nn.functional.softmax(predict2, dim=1)
           predict3, _, _ = model3(data)
           predict3 = nn.functional.softmax(predict3, dim=1)
+          # average of the three predictions
           a, b, c = 0.3333, 0.3333, 0.3333
           predict = a*predict1 + b*predict2 + c*predict3
 
           predict = nn.functional.interpolate(predict, (512, 1024), mode='bilinear', align_corners=True).cpu().data[0].numpy()
 
-          # print("predict_size",predict.shape)
           label=np.argmax(predict, axis=0)
           prob=np.max(predict, axis=0)
-          # print("predict_label_size",predicted_label.shape)
-          # print("label_size",label.shape)
           predicted_label[i] = label.copy()
           predicted_prob[i] = prob.copy()
 
@@ -123,7 +115,6 @@ def generate_pseudo_labels(args,model1,model2,model3,dataloader):
           os.makedirs("/content/PseudoLabel")
         file_path =f"/content/PseudoLabel/{str(index).zfill(5)}.png"
         output.save(file_path)    
-
     return
 
 def str2bool(v):
@@ -249,14 +240,15 @@ if __name__ == '__main__':
         model3 = torch.nn.DataParallel(model3).cuda()
 
 
-    print("training model with "+ args.training_path)
-    checkpoint1 = torch.load("/content/FDA_run_beta0.01/latest_epoch_49_.pth")
-    checkpoint2 = torch.load("/content/FDA_run_beta0.05/latest_epoch_49_.pth")
-    checkpoint3 = torch.load("/content/FDA_run_beta0.09/latest_epoch_49_.pth")
+    # load checkpoints for the three models pretrained with different beta values
+    checkpoint1 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.01/latest_epoch_49_.pth")
+    checkpoint2 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.05/latest_epoch_49_.pth")
+    checkpoint3 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.09/latest_epoch_49_.pth")
     model1.module.load_state_dict(checkpoint1['model_state_dict'])
     model2.module.load_state_dict(checkpoint2['model_state_dict'])
     model3.module.load_state_dict(checkpoint3['model_state_dict'])
 
+    # MBT model evaluation
     if args.use=="evalmulti":
       dataset=CityScapes(mode='val')
 
@@ -269,7 +261,9 @@ if __name__ == '__main__':
 
       val_multi(args, model1, model2, model3, dataloader)
     
+    # pseudo label generation with MBT model  
     elif args.use=="generatepseudo":
+        
       dataset=CityScapes(mode="train")
       dataloader= torch.utils.data.DataLoader(
                       dataset=dataset,

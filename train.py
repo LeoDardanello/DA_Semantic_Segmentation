@@ -14,7 +14,6 @@ from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, f
 from my_utils import split_dataset
 from tqdm import tqdm
 from datasets.gta5 import GTA5
-import shutil
 
 logger = logging.getLogger()
 
@@ -43,10 +42,6 @@ def val(args, model, dataloader):
             # compute per pixel accuracy
             precision = compute_global_accuracy(predict, label)
             hist += fast_hist(label.flatten(), predict.flatten(), args.num_classes)
-
-            # there is no need to transform the one-hot array to visual RGB array
-            # predict = colour_code_segmentation(np.array(predict), label_info)
-            # label = colour_code_segmentation(np.array(label), label_info)
             precision_record.append(precision)
 
         precision = np.mean(precision_record)
@@ -98,13 +93,13 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
         loss_train_mean = np.mean(loss_record)
         writer.add_scalar('epoch/loss_epoch_train', float(loss_train_mean), epoch)
         print('loss for train : %f' % (loss_train_mean))
+
         if epoch % args.checkpoint_step == 0 and epoch != 0:
             import os
             if not os.path.isdir(args.save_model_path):
                 os.mkdir(args.save_model_path)
             filename=f'latest_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/GTA5_Cityscapes_NoDataAug")
 
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_val)
@@ -114,7 +109,6 @@ def train(args, model, optimizer, dataloader_train, dataloader_val):
                 os.makedirs(args.save_model_path, exist_ok=True)
             filename=f'best_epoch_{epoch}_.pth'
             torch.save(model.module.state_dict(), os.path.join(args.save_model_path,filename))
-            shutil.move(args.save_model_path+"/"+filename, "/content/drive/MyDrive/AMLUtils/GTA5_Cityscapes_NoDataAug")
             writer.add_scalar('epoch/precision_val', precision, epoch)
             writer.add_scalar('epoch/miou val', miou, epoch)
 
@@ -246,13 +240,12 @@ def main():
         
     if args.dataset_test=='GTA5':
         print("Testing on GTA5 dataset")
-        dataset=GTA5(mode)
+        dataset=GTA5(mode='val')
         _,test_dataset=split_dataset(dataset)
     elif args.dataset_test=='Cityscapes':
         print("Testing on Cityscapes dataset")
         test_dataset=CityScapes(mode='val')
         
-
     dataloader_train = DataLoader(train_dataset,
                     batch_size=args.batch_size,
                     shuffle=False,
@@ -269,8 +262,6 @@ def main():
     ## model
     model = BiSeNet(backbone=args.backbone, n_classes=n_classes, pretrain_model=args.pretrain_path, use_conv_last=args.use_conv_last, training_model=args.training_path)
     
-    
-
     if torch.cuda.is_available() and args.use_gpu:
         model = torch.nn.DataParallel(model).cuda()
     

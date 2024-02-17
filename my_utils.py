@@ -21,8 +21,7 @@ def split_dataset(toSplit):
 
 def one_hot_custom(label, label_info):
     semantic_map = np.zeros(label.shape[:2],dtype=np.uint8)
-    # print("sematic shape",semantic_map.shape)
-    # print("label_shape",label.shape)
+
     for info in label_info:
         color = info[-3:]
         class_map = np.all(label == color.reshape(1, 1,3), axis=2)
@@ -337,7 +336,7 @@ def toimage(arr, high=255, low=0, cmin=None, cmax=None, pal=None,
     image = Image.frombytes(mode, shape, strdata)
     return image
 	
-# FDA: Fourier Domain Adaptation
+# FDA: Fourier Domain Adaptation from the paper "Fourier Domain Adaptation for Semantic Segmentation"
 class FourierDomainAdaptation(object):
 
 	def __init__(self, beta=0.01):
@@ -397,7 +396,8 @@ class FourierDomainAdaptation(object):
 			src_in_trg = np.real(src_in_trg)
 
 			return src_in_trg
-	
+
+# More aggressive parameter tuning	
 def adjust_learning_rate(optimizer, learning_rate,iter, max_iter, power=0.9):
 	lr = poly_lr_scheduler(optimizer, learning_rate, iter= iter, max_iter=max_iter, power=power)
 	if len(optimizer.param_groups) > 1:

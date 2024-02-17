@@ -12,55 +12,15 @@ import torch.cuda.amp as amp
 from torch.utils.data.dataset import Subset
 from utils import poly_lr_scheduler, reverse_one_hot, compute_global_accuracy, fast_hist, per_class_iu
 from my_utils import adjust_learning_rate,split_dataset
+from train import val
 from tqdm import tqdm
 from datasets.gta5 import GTA5
 from torch.nn import functional as F
 from model.discriminator import FCDiscriminator
 from datasets.FDA import  FDA 
-import shutil
 from torch.autograd import Variable
 
 logger = logging.getLogger()
-
-
-def val(args, model, dataloader):
-    print('start val!')
-    with torch.no_grad():
-        model.eval()
-        precision_record = []
-        hist = np.zeros((args.num_classes, args.num_classes))
-        for i, (data, label) in tqdm(enumerate(dataloader), total=len(dataloader)):
-            label = label.type(torch.LongTensor)
-            data = data.cuda()
-            label = label.long().cuda()
-
-            # get RGB predict image
-            predict, _, _ = model(data)
-            predict = predict.squeeze(0)
-            predict = reverse_one_hot(predict)
-            predict = np.array(predict.cpu())
-
-            # get RGB label image
-            label = label.squeeze()
-            label = np.array(label.cpu())
-
-            # compute per pixel accuracy
-            precision = compute_global_accuracy(predict, label)
-            hist += fast_hist(label.flatten(), predict.flatten(), args.num_classes)
-
-            # there is no need to transform the one-hot array to visual RGB array
-            # predict = colour_code_segmentation(np.array(predict), label_info)
-            # label = colour_code_segmentation(np.array(label), label_info)
-            precision_record.append(precision)
-
-        precision = np.mean(precision_record)
-        miou_list = per_class_iu(hist)
-        miou = np.mean(miou_list)
-        print('precision per pixel for test: %.3f' % precision)
-        print('mIoU for validation: %.3f' % miou)
-        print(f'mIoU per class: {miou_list}')
-
-        return precision, miou
 
 # dataloader source= GTA train, dataloader target= Cityscapes train, dataloader test= Cityscapes val
 def train(args, model, optimizer, dataloader_source, dataloader_target, dataloader_test, checkpoint=None):
@@ -74,19 +34,23 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
     target_label = 1
     max_miou = 0
     step = 0
+    # discriminator initialization
     model_D = FCDiscriminator(num_classes=args.num_classes)
     if torch.cuda.is_available() and args.use_gpu:
         model_D = torch.nn.DataParallel(model_D).cuda()
     
     if args.training_path != '':   
+        # loading discriminator from checkpoint
         print("training discriminator function with "+ args.training_path)
         model_D.module.load_state_dict(checkpoint['discriminator_function_dict'])
     
     model_D.train()
 
+    # optimizer for discriminator
     optimizer_D = torch.optim.Adam(model_D.parameters(), lr=args.learning_rate, betas=(0.9, 0.99))
     
     if args.training_path != '':
+        # loading optimizer for discriminator from checkpoint
         print("loading discriminator optimizer with "+ args.training_path)
         optimizer_D.load_state_dict(checkpoint['optimizer_discriminator_dict'])
 
@@ -101,15 +65,20 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
         for i, (source_data, target_data) in enumerate(zip(dataloader_source,dataloader_target)):
             
             if args.enable_FDA:
-              data,label,data_fda=source_data
-              data_fda=data_fda.cuda()
+                # if Fourier Domain Adaptation is enabled, data is the original GTA5 image, label is the GTA5 label, data_fda is
+                # the GTA5 image transformed with the Fourier Domain Adaptation
+                data,label,data_fda=source_data
+                data_fda=data_fda.cuda()
             else:
-              data, label= source_data
+                # data is the original GTA5 image, label is the GTA5 label
+                data, label= source_data
 
             if args.use_pseudo_label:
+                # if pseudo label is enabled, img_target is the original Cityscapes image, pseudo_label is the Cityscapes pseudo label
                 img_target,pseudo_label =target_data
                 pseudo_label=pseudo_label.long().cuda()
             else:
+                # img_target is the original Cityscapes image, label is ignored
                 img_target,_=target_data
 
             data = data.cuda()
@@ -124,24 +93,25 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
             for param in model_D.parameters():
                 param.requires_grad = False
 
-            with amp.autocast():        
+            with amp.autocast():    
+                 
                 output, out16, out32 = model(data_fda) if args.enable_FDA else model(data)
- 
+                # compute segmentation loss for source domain   
                 loss1 = loss_func(output, label.squeeze(1))
                 loss2 = loss_func(out16, label.squeeze(1))
                 loss3 = loss_func(out32, label.squeeze(1))
                 loss = loss1 + loss2 + loss3 
 
-                # compute adversarial loss
                 out_tar, out16_tar, out32_tar = model(img_target)
                 if args.use_pseudo_label:
+                    # compute segmentation loss for target domain when pseudo labels are available
                     loss1 = loss_func(out_tar, pseudo_label.squeeze(1))
                     loss2 = loss_func(out16_tar, pseudo_label.squeeze(1))
                     loss3 = loss_func(out32_tar, pseudo_label.squeeze(1))
                     loss += loss1 + loss2 + loss3 
-             
+
                 D_out = model_D(F.softmax(out_tar, dim=1))
-                
+                # compute adversarial loss with target domain
                 loss_D = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
                 loss += args.lamb * loss_D
                 
@@ -164,13 +134,15 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
 
             with amp.autocast():
                 D_out = model_D(F.softmax(pred, dim=1))
+                # loss for discriminator using source domain
                 loss_D_src = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(source_label)).cuda())
             pred = out_tar.detach()
 
             with amp.autocast():
                 D_out = model_D(F.softmax(pred, dim=1))
+                # loss for discriminator using target domain
                 loss_D_trg = bce_loss(D_out, Variable(torch.FloatTensor(D_out.data.size()).fill_(target_label)).cuda())
-            
+            # overall discriminator loss
             loss_D = loss_D_src/2 + loss_D_trg/2
             scaler.scale(loss_D).backward()
 
@@ -195,9 +167,7 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 'optimizer_state_dict': optimizer.state_dict(),
                 'optimizer_discriminator_dict': optimizer_D.state_dict(),
             },args.save_model_path+"/"+filename)
-            shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
 
-  
         if epoch % args.validation_step == 0 and epoch != 0:
             precision, miou = val(args, model, dataloader_test)
             if miou > max_miou:
@@ -211,7 +181,6 @@ def train(args, model, optimizer, dataloader_source, dataloader_target, dataload
                 'optimizer_state_dict': optimizer.state_dict(),
                 'optimizer_discriminator_dict': optimizer_D.state_dict(),
                 },args.save_model_path+"/"+filename)
-                shutil.move(args.save_model_path+"/"+filename, f"/content/drive/MyDrive/AMLUtils/FDA/beta{args.beta}/")
                 writer.add_scalar('epoch/precision_val', precision, epoch)
                 writer.add_scalar('epoch/miou val', miou, epoch)
   
@@ -324,20 +293,6 @@ def parse_args():
 
     return parse.parse_args()
 
-import re
-
-def recover_split(toSplit, beta):
-    print('Recovering split for beta : ', beta)
-    train_indexes = []
-    file_path = f'/content/drive/MyDrive/AMLUtils/FDA_{beta}/source_data.txt'
-    with open(file_path, 'r') as file:
-        for line in file:
-            match = re.search(r'(\d{5})\.png', line)
-            if match:
-                numero = int(match.group(1))
-                train_indexes.append(numero-1)
-    return Subset(toSplit,train_indexes)
-
 def main():
     args = parse_args()
 
@@ -347,37 +302,14 @@ def main():
     mode = args.mode
   
     target_dataset = CityScapes(mode, args.use_pseudo_label)
-    dataset=GTA5(mode, args.enable_da)
-    if args.enable_FDA:
-      source_dataset = recover_split(dataset, args.beta)
-      source_dataset = FDA(source_dataset, target_dataset.data, args.beta)
-    else:
-      source_dataset,_=split_dataset(dataset)
-
-    '''dataset=GTA5(mode, args.enable_da)
-    source_dataset,_=split_dataset(dataset)
+    dataset = GTA5(mode, args.enable_da)
+    source_dataset,_ = split_dataset(dataset)
 
     if args.enable_FDA:
-        try:
-            with open("/content/source_data.txt", 'w') as file:
-                for i in source_dataset.indices:
-                    file.write(source_dataset.dataset.data[i] + '\n')
-            print(f"Il vettore è stato salvato con successo nel file source_data.txt ")
-        except Exception as e:
-            print(f"Si è verificato un errore: {e}")
-        
-        try:
-            with open("/content/source_label.txt", 'w') as file:
-                for i in source_dataset.indices:
-                    file.write(source_dataset.dataset.label[i] + '\n')
-            print(f"Il vettore è stato salvato con successo nel file source_label.txt ")
-        except Exception as e:
-            print(f"Si è verificato un errore: {e}")
-        source_dataset= FDA(source_dataset.dataset.data, target_dataset.data, source_dataset.dataset.label, args.beta)'''
-    
-    test_dataset=CityScapes(mode='val')
-        
+        source_dataset = FDA(source_dataset, target_dataset.data, args.beta)
 
+    test_dataset = CityScapes(mode='val')
+        
     dataloader_source = DataLoader(source_dataset,
                     batch_size=args.batch_size,
                     shuffle=False,
