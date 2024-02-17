@@ -241,9 +241,9 @@ if __name__ == '__main__':
 
 
     # load checkpoints for the three models pretrained with different beta values
-    checkpoint1 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.01/latest_epoch_49_.pth")
-    checkpoint2 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.05/latest_epoch_49_.pth")
-    checkpoint3 = torch.load("/content/DA_Semantic_Segmentation/checkpoint/FDA_run_beta0.09/latest_epoch_49_.pth")
+    checkpoint1 = torch.load("/content/drive/MyDrive/checkpoint/FDA_run_beta0.01/latest_epoch_49_.pth")
+    checkpoint2 = torch.load("/content/drive/MyDrive/checkpoint/FDA_run_beta0.05/latest_epoch_49_.pth")
+    checkpoint3 = torch.load("/content/drive/MyDrive/checkpoint/FDA_run_beta0.09/latest_epoch_49_.pth")
     model1.module.load_state_dict(checkpoint1['model_state_dict'])
     model2.module.load_state_dict(checkpoint2['model_state_dict'])
     model3.module.load_state_dict(checkpoint3['model_state_dict'])
