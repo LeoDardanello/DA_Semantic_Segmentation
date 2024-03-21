@@ -1,5 +1,6 @@
-# DA_Semantic_Segmentation
-A Real Time Domain Adaptation for Semantic Segmentation. Project developed for the Advanced Machine Learning @polito
+# Real-Time Domain Adaptation for Semantic Segmentation
+This work was developed for the Advanced Machine Learning course @[Politenico di Torino](https://github.com/Polito).
+
 
 Datasets can be found at: [Dataset folder](https://drive.google.com/drive/u/3/folders/1iE8wJT7tuDOVjEBZ7A3tOPZmNdroqG1m)
 
